@@ -3,12 +3,32 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class CriteriosValoracion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    precio: int = Field(ge=1, le=5)
+    calidad: int = Field(ge=1, le=5)
+    atencion: int = Field(ge=1, le=5)
+    puntualidad: int = Field(ge=1, le=5)
+
+
+class CalificacionesComentariosIn(BaseModel):
+    puntuacion_global: int = Field(ge=1, le=5)
+    criterios: CriteriosValoracion
+    comentario: str | None = Field(default=None, max_length=1000)
+
+
+class SolicitudResenaCreate(BaseModel):
+    contacto_referencia_cliente: str = Field(min_length=3, max_length=100)
+
+
 class SolicitudResenaOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id_solicitud: int
     oferente_id: int
     codigo_unico: str
+    contacto_referencia_cliente: str
     estado: str
     fecha_generacion: datetime
     fecha_expiracion: datetime | None = None
@@ -16,15 +36,13 @@ class SolicitudResenaOut(BaseModel):
 
 class ResenaCreate(BaseModel):
     codigo_unico: str
-    nombre_cliente: str
-    contacto_cliente_ingresado: str
-    calificacion: int = Field(ge=1, le=5)
-    comentario: str | None = None
+    nombre_cliente: str = Field(min_length=2, max_length=100)
+    contacto_cliente_ingresado: str = Field(min_length=3, max_length=100)
+    calificaciones_comentarios: CalificacionesComentariosIn
 
 
 class ResenaModeracion(BaseModel):
     aprobar: bool
-    replica_oferente: str | None = None
 
 
 class ResenaOut(BaseModel):
@@ -34,10 +52,8 @@ class ResenaOut(BaseModel):
     oferente_id: int
     solicitud_id: int
     nombre_cliente: str
-    calificacion: int
-    comentario: str | None = None
+    calificaciones_comentarios: dict
     estado: str
-    replica_oferente: str | None = None
     fecha_creacion: datetime
 
 

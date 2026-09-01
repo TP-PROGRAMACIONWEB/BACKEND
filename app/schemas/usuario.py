@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr
 
-from app.models.usuario import EstadoCuenta, RolUsuario
+from app.models.usuario import RolUsuario
 
 
 class UsuarioBase(BaseModel):
@@ -23,7 +23,7 @@ class UsuarioOut(UsuarioBase):
 
     id_usuario: int
     rol: RolUsuario
-    estado_cuenta: EstadoCuenta
+    estado_cuenta: str
     fecha_registro: datetime
 
 

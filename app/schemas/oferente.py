@@ -1,7 +1,11 @@
+import re
 from datetime import time
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+
+DNI_CUIT_RE = re.compile(r"^[0-9-]{6,50}$")
+TELEFONO_RE = re.compile(r"^[0-9+\s]{6,50}$")
 
 
 class OferenteBase(BaseModel):
@@ -18,6 +22,20 @@ class OferenteBase(BaseModel):
     hora_fin_atencion: time | None = None
     disponible_emergencia: bool = False
     descripcion: str | None = None
+
+    @field_validator("dni_cuit")
+    @classmethod
+    def validar_dni_cuit(cls, value: str) -> str:
+        if not DNI_CUIT_RE.match(value):
+            raise ValueError("DNI/CUIT inválido: solo se permiten dígitos y guiones")
+        return value
+
+    @field_validator("telefono")
+    @classmethod
+    def validar_telefono(cls, value: str) -> str:
+        if not TELEFONO_RE.match(value):
+            raise ValueError("Teléfono inválido: solo se permiten dígitos, espacios y '+'")
+        return value
 
 
 class OferenteCreate(OferenteBase):
@@ -38,12 +56,18 @@ class OferenteUpdate(BaseModel):
     disponible_emergencia: bool | None = None
     descripcion: str | None = None
 
+    @field_validator("telefono")
+    @classmethod
+    def validar_telefono(cls, value: str | None) -> str | None:
+        if value is not None and not TELEFONO_RE.match(value):
+            raise ValueError("Teléfono inválido: solo se permiten dígitos, espacios y '+'")
+        return value
+
 
 class OferenteOut(OferenteBase):
     model_config = ConfigDict(from_attributes=True)
 
     id_oferente: int
-    id_usuario: int
     estado_verificacion: str
     promedio_calificacion: Decimal
-    cantidad_resenas_rechazadas: int
+    cantidad_rechazos_acumulados: int

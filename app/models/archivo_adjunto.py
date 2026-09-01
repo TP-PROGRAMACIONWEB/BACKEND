@@ -8,7 +8,7 @@ class ArchivoAdjunto(Base):
     __tablename__ = "archivos_adjuntos"
 
     id_archivo = Column(Integer, primary_key=True, index=True)
-    oferente_id = Column(Integer, ForeignKey("oferentes.id_oferente"), nullable=False)
+    oferente_id = Column(Integer, ForeignKey("oferentes.id_oferente", ondelete="CASCADE"), nullable=False, index=True)
     tipo = Column(String(50), nullable=False)
     url_archivo = Column(String(255), nullable=False)
     fecha_subida = Column(DateTime(timezone=True), server_default=func.now())

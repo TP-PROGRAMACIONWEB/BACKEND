@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user
 from app.db.database import get_db
 from app.models.oferente import Oferente
-from app.models.usuario import Usuario
+from app.models.usuario import RolUsuario, Usuario
 from app.schemas.oferente import OferenteCreate, OferenteOut, OferenteUpdate
 
 router = APIRouter(prefix="/api/v1/oferentes", tags=["Oferentes"])
@@ -41,11 +41,15 @@ def crear_perfil_oferente(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ):
-    """RF2 — Creación del perfil profesional del oferente."""
+    """RF2/HU-02 — Creación del perfil profesional del oferente."""
+    if usuario.rol != RolUsuario.OFERENTE:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo los usuarios con rol Oferente pueden crear un perfil")
     if usuario.oferente:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El usuario ya tiene un perfil de oferente")
+    if db.query(Oferente).filter(Oferente.dni_cuit == payload.dni_cuit).first():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El DNI/CUIT ya está registrado")
 
-    oferente = Oferente(id_usuario=usuario.id_usuario, **payload.model_dump())
+    oferente = Oferente(id_oferente=usuario.id_usuario, **payload.model_dump())
     db.add(oferente)
     db.commit()
     db.refresh(oferente)
@@ -63,7 +67,7 @@ def actualizar_perfil_oferente(
     oferente = db.get(Oferente, oferente_id)
     if not oferente:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Oferente no encontrado")
-    if oferente.id_usuario != usuario.id_usuario:
+    if oferente.id_oferente != usuario.id_usuario:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado")
 
     for field, value in payload.model_dump(exclude_unset=True).items():
