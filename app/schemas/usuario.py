@@ -10,10 +10,14 @@ class UsuarioBase(BaseModel):
 
 
 class UsuarioCreate(UsuarioBase):
+    model_config = ConfigDict(json_schema_extra={"example": {"email": "juan.perez@offix.test", "password": "Offix2026!"}})
+
     password: str
 
 
 class UsuarioLogin(BaseModel):
+    model_config = ConfigDict(json_schema_extra={"example": {"email": "juan.perez@offix.test", "password": "Offix2026!"}})
+
     email: EmailStr
     password: str
 

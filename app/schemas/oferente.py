@@ -39,7 +39,20 @@ class OferenteBase(BaseModel):
 
 
 class OferenteCreate(OferenteBase):
-    pass
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "nombre": "Juan",
+                "apellido": "Pérez",
+                "dni_cuit": "20-30111222-3",
+                "telefono": "+54 3564 400111",
+                "categoria_id": 1,
+                "numero_matricula": "EL-12345",
+                "disponible_emergencia": True,
+                "descripcion": "Electricista matriculado, más de 10 años de experiencia.",
+            }
+        }
+    )
 
 
 class OferenteUpdate(BaseModel):

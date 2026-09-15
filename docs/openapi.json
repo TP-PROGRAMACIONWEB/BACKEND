@@ -1,0 +1,2150 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Offix API",
+    "description": "API REST del backend de Offix, red social de oficios (UTN FRSF).\n\n### Cómo autenticarse\n1. `POST /api/v1/auth/registro` para crear un usuario.\n2. `POST /api/v1/auth/login` para obtener un `access_token` (JWT).\n3. Enviarlo en cada request protegida como header `Authorization: Bearer <access_token>` (en Swagger UI: botón **Authorize**, arriba a la derecha).\n\n### Para el equipo de QA (Hoppscotch)\nEl spec completo también está disponible en `/openapi.json` y como archivo estático en `docs/openapi.json` del repo — se puede importar directo en Hoppscotch como colección.\n\n### Estado del proyecto\nSprint 1 — flujo de reseña (HU-01) con validación de enlace simulada, sin envío real de mail/WhatsApp. Ver `docs/plan-sprint-1.md` para el detalle de alcance y decisiones.",
+    "contact": {
+      "name": "Equipo Offix - UTN FRSF"
+    },
+    "version": "0.1.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Entorno local (iniciar_backend.bat)"
+    }
+  ],
+  "paths": {
+    "/api/v1/auth/registro": {
+      "post": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Registrar un nuevo usuario",
+        "description": "RF1/RF4 — Registro de nuevos usuarios Oferentes.\n\nCrea el Usuario (rol Oferente por defecto). Para poder generar/aprobar\nreseñas o gestionar un perfil profesional, después hay que crear el\nperfil con `POST /api/v1/oferentes` usando el token devuelto por `/login`.",
+        "operationId": "registrar_usuario_api_v1_auth_registro_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsuarioCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "El email ya está registrado"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Iniciar sesión",
+        "description": "RF4 — Inicio de sesión.\n\nDevuelve un JWT (`access_token`). Enviarlo en cada request protegida como\nheader `Authorization: Bearer <token>`.",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsuarioLogin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Email o contraseña incorrectos"
+          },
+          "403": {
+            "description": "La cuenta está suspendida o bloqueada"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Cerrar sesión",
+        "description": "HU-03 T03 — El JWT es stateless y no hay tabla de sesiones/blacklist en el\nDER acordado con la PM, así que no se revoca el token en el servidor. Este\nendpoint exige un token válido (confirma que había sesión activa); el cierre\nde sesión real lo hace el cliente descartando el token guardado.",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Token faltante, inválido o expirado"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/oferentes": {
+      "get": {
+        "tags": [
+          "Oferentes"
+        ],
+        "summary": "Buscar profesionales (público)",
+        "description": "RF7/RF8 — Búsqueda y consulta pública de perfiles profesionales. No requiere login.",
+        "operationId": "buscar_oferentes_api_v1_oferentes_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Palabra clave: nombre o apellido",
+              "title": "Q"
+            },
+            "description": "Palabra clave: nombre o apellido"
+          },
+          {
+            "name": "categoria_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filtrar por categoría/oficio",
+              "title": "Categoria Id"
+            },
+            "description": "Filtrar por categoría/oficio"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OferenteOut"
+                  },
+                  "title": "Response Buscar Oferentes Api V1 Oferentes Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Oferentes"
+        ],
+        "summary": "Crear el perfil profesional del usuario autenticado",
+        "description": "RF2/HU-02 — Creación del perfil profesional del oferente. El\n`id_oferente` resultante es siempre igual al `id_usuario` del usuario\nautenticado (comparten clave primaria).",
+        "operationId": "crear_perfil_oferente_api_v1_oferentes_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OferenteCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OferenteOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "El usuario autenticado no tiene rol Oferente"
+          },
+          "409": {
+            "description": "El usuario ya tiene perfil, o el DNI/CUIT ya está registrado"
+          },
+          "422": {
+            "description": "Campo obligatorio faltante o DNI/CUIT/teléfono con formato inválido"
+          }
+        }
+      }
+    },
+    "/api/v1/oferentes/{oferente_id}": {
+      "get": {
+        "tags": [
+          "Oferentes"
+        ],
+        "summary": "Consultar el perfil de un profesional (público)",
+        "description": "RF7 — Consulta pública de perfil profesional. No requiere login.",
+        "operationId": "obtener_oferente_api_v1_oferentes__oferente_id__get",
+        "parameters": [
+          {
+            "name": "oferente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Oferente Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OferenteOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Oferente no encontrado"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Oferentes"
+        ],
+        "summary": "Editar el perfil profesional propio",
+        "description": "RF2 — Edición del perfil profesional. Solo el dueño puede editarlo.",
+        "operationId": "actualizar_perfil_oferente_api_v1_oferentes__oferente_id__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "oferente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Oferente Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OferenteUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OferenteOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "El usuario autenticado no es el dueño del perfil"
+          },
+          "404": {
+            "description": "Oferente no encontrado"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/categorias": {
+      "get": {
+        "tags": [
+          "Categorías"
+        ],
+        "summary": "Listar categorías/oficios (público)",
+        "description": "RF5 — Navegación pública, sin login requerido.",
+        "operationId": "listar_categorias_api_v1_categorias_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CategoriaOut"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Categorias Api V1 Categorias Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Categorías"
+        ],
+        "summary": "Crear categoría (solo Administrador)",
+        "description": "RF18 — Administración de categorías de oficios.",
+        "operationId": "crear_categoria_api_v1_categorias_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoriaCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoriaOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token"
+          },
+          "403": {
+            "description": "Requiere rol Administrador"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/categorias/{categoria_id}": {
+      "put": {
+        "tags": [
+          "Categorías"
+        ],
+        "summary": "Editar categoría (solo Administrador)",
+        "description": "RF18.",
+        "operationId": "actualizar_categoria_api_v1_categorias__categoria_id__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "categoria_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Categoria Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoriaUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoriaOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token"
+          },
+          "403": {
+            "description": "Requiere rol Administrador"
+          },
+          "404": {
+            "description": "Categoría no encontrada"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Categorías"
+        ],
+        "summary": "Eliminar categoría (solo Administrador)",
+        "description": "RF18.",
+        "operationId": "eliminar_categoria_api_v1_categorias__categoria_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "categoria_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Categoria Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Falta token"
+          },
+          "403": {
+            "description": "Requiere rol Administrador"
+          },
+          "404": {
+            "description": "Categoría no encontrada"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/oferentes/{oferente_id}/solicitudes-resena": {
+      "post": {
+        "tags": [
+          "Reseñas",
+          "Reseñas"
+        ],
+        "summary": "Generar enlace de reseña (paso 1 del flujo HU-01)",
+        "description": "RF10 — El Oferente (logueado) genera el link/QR único de reseña, indicando\nel contacto de referencia del cliente al que se lo va a enviar.\n\nSprint 1: el envío del enlace es **simulado** — no se manda mail/WhatsApp\nreal todavía. El `codigo_unico` devuelto en la respuesta es el dato que hay\nque pegar en `POST /api/v1/resenas` (o codificar en un QR) para simular el\nlink que recibiría el cliente.",
+        "operationId": "generar_solicitud_resena_api_v1_oferentes__oferente_id__solicitudes_resena_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "oferente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Oferente Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudResenaCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolicitudResenaOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "El oferente autenticado no es el dueño del perfil"
+          },
+          "404": {
+            "description": "Oferente no encontrado"
+          },
+          "422": {
+            "description": "Falta contacto_referencia_cliente o es inválido"
+          }
+        }
+      }
+    },
+    "/api/v1/resenas": {
+      "post": {
+        "tags": [
+          "Reseñas"
+        ],
+        "summary": "Registrar una reseña (paso 2 del flujo HU-01, público, sin login)",
+        "description": "RF10 — El cliente deja la reseña accediendo exclusivamente vía el\n`codigo_unico` recibido en el enlace/QR, sin necesidad de loguearse. Queda\nen estado `Pendiente_Aprobacion` hasta que el Oferente la modere\n(`PATCH /resenas/{id}/moderar`).",
+        "operationId": "registrar_resena_api_v1_resenas_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResenaCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResenaOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "codigo_unico inexistente o ya utilizado"
+          },
+          "422": {
+            "description": "Falta un campo obligatorio o un criterio está fuera de 1-5"
+          }
+        }
+      }
+    },
+    "/api/v1/oferentes/{oferente_id}/resenas": {
+      "get": {
+        "tags": [
+          "Reseñas"
+        ],
+        "summary": "Listar reseñas aprobadas de un oferente (público)",
+        "description": "RF7 — Solo devuelve reseñas en estado `Aprobada`; las pendientes y\nrechazadas no son visibles públicamente.",
+        "operationId": "listar_resenas_publicas_api_v1_oferentes__oferente_id__resenas_get",
+        "parameters": [
+          {
+            "name": "oferente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Oferente Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ResenaOut"
+                  },
+                  "title": "Response Listar Resenas Publicas Api V1 Oferentes  Oferente Id  Resenas Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/resenas/{resena_id}/moderar": {
+      "patch": {
+        "tags": [
+          "Reseñas"
+        ],
+        "summary": "Aprobar o rechazar una reseña pendiente",
+        "description": "RF11/RF13 — El Oferente aprueba o rechaza la reseña. Si se rechazan 5 o\nmás de las últimas 10 reseñas del oferente, se genera automáticamente una\n`AlertaAdministrador` (RF11) visible en `GET /admin/alertas`.",
+        "operationId": "moderar_resena_api_v1_resenas__resena_id__moderar_patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "resena_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Resena Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResenaModeracion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResenaOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "La reseña ya fue moderada (no está Pendiente_Aprobacion)"
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "El oferente autenticado no es el dueño de la reseña"
+          },
+          "404": {
+            "description": "Reseña no encontrada"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/usuarios": {
+      "get": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Listar todos los usuarios",
+        "description": "RF14 — Gestión de usuarios.",
+        "operationId": "listar_usuarios_api_v1_admin_usuarios_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UsuarioOut"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Usuarios Api V1 Admin Usuarios Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "Requiere rol Administrador"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/usuarios/{usuario_id}/estado": {
+      "patch": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Suspender/bloquear/reactivar un usuario",
+        "description": "RF15 — Bloquear o suspender usuarios. Un usuario Suspendida/Bloqueada no puede hacer login.",
+        "operationId": "cambiar_estado_usuario_api_v1_admin_usuarios__usuario_id__estado_patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "usuario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Usuario Id"
+            }
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/EstadoCuentaEnum"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "Requiere rol Administrador"
+          },
+          "404": {
+            "description": "Usuario no encontrado"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/oferentes/{oferente_id}/verificacion": {
+      "patch": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Marcar manualmente el estado de verificación de matrícula",
+        "description": "HU-02 T07 — Simula la integración con el ente validador de matrículas\n(electricista, gasista, plomero, técnico en aire acondicionado): para\nSprint 1 el estado se marca manualmente en vez de consultar un servicio\nexterno real.",
+        "operationId": "actualizar_estado_verificacion_api_v1_admin_oferentes__oferente_id__verificacion_patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "oferente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Oferente Id"
+            }
+          },
+          {
+            "name": "estado_verificacion",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/EstadoVerificacionEnum"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OferenteOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "Requiere rol Administrador"
+          },
+          "404": {
+            "description": "Oferente no encontrado"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/alertas": {
+      "get": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Listar alertas generadas por rechazos reiterados de reseñas",
+        "description": "RF17 — Revisión de alertas por rechazos reiterados de reseñas.",
+        "operationId": "listar_alertas_api_v1_admin_alertas_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "Requiere rol Administrador"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/resenas/rechazadas": {
+      "get": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Listar reseñas rechazadas por sus oferentes",
+        "description": "RF17 — El administrador puede revisar y revertir rechazos incorrectos.",
+        "operationId": "listar_resenas_rechazadas_api_v1_admin_resenas_rechazadas_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ResenaAdminOut"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Resenas Rechazadas Api V1 Admin Resenas Rechazadas Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "Requiere rol Administrador"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/resenas/{resena_id}/publicar": {
+      "patch": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Publicar una reseña que el oferente había rechazado",
+        "description": "RF17 — El Administrador, como instancia final, publica una reseña rechazada por el Oferente.",
+        "operationId": "publicar_resena_rechazada_api_v1_admin_resenas__resena_id__publicar_patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "resena_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Resena Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResenaAdminOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "Requiere rol Administrador"
+          },
+          "404": {
+            "description": "Reseña no encontrada"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Salud"
+        ],
+        "summary": "Chequeo de salud del servicio",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CalificacionesComentariosIn": {
+        "properties": {
+          "puntuacion_global": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Puntuacion Global",
+            "description": "Puntuación global de la reseña, 1 a 5."
+          },
+          "criterios": {
+            "$ref": "#/components/schemas/CriteriosValoracion"
+          },
+          "comentario": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comentario",
+            "description": "Comentario de texto libre, opcional."
+          }
+        },
+        "type": "object",
+        "required": [
+          "puntuacion_global",
+          "criterios"
+        ],
+        "title": "CalificacionesComentariosIn",
+        "example": {
+          "comentario": "Excelente trabajo, muy prolijo y llegó puntual.",
+          "criterios": {
+            "atencion": 5,
+            "calidad": 5,
+            "precio": 4,
+            "puntualidad": 4
+          },
+          "puntuacion_global": 5
+        }
+      },
+      "CategoriaCreate": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre"
+        ],
+        "title": "CategoriaCreate",
+        "example": {
+          "descripcion": "Instalaciones y reparaciones eléctricas.",
+          "nombre": "Electricista"
+        }
+      },
+      "CategoriaOut": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "id_categoria": {
+            "type": "integer",
+            "title": "Id Categoria"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre",
+          "id_categoria",
+          "estado"
+        ],
+        "title": "CategoriaOut"
+      },
+      "CategoriaUpdate": {
+        "properties": {
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "estado": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado"
+          }
+        },
+        "type": "object",
+        "title": "CategoriaUpdate"
+      },
+      "CriteriosValoracion": {
+        "properties": {
+          "precio": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Precio",
+            "description": "Puntuación 1-5 por el precio del servicio."
+          },
+          "calidad": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Calidad",
+            "description": "Puntuación 1-5 por la calidad/ejecución del trabajo."
+          },
+          "atencion": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Atencion",
+            "description": "Puntuación 1-5 por el trato/atención al cliente."
+          },
+          "puntualidad": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Puntualidad",
+            "description": "Puntuación 1-5 por la puntualidad/cumplimiento de horarios."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "precio",
+          "calidad",
+          "atencion",
+          "puntualidad"
+        ],
+        "title": "CriteriosValoracion",
+        "example": {
+          "atencion": 5,
+          "calidad": 5,
+          "precio": 4,
+          "puntualidad": 4
+        }
+      },
+      "EstadoCuentaEnum": {
+        "type": "string",
+        "enum": [
+          "Activa",
+          "Suspendida",
+          "Bloqueada"
+        ],
+        "title": "EstadoCuentaEnum"
+      },
+      "EstadoVerificacionEnum": {
+        "type": "string",
+        "enum": [
+          "Pendiente",
+          "Verificado",
+          "Rechazado"
+        ],
+        "title": "EstadoVerificacionEnum"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "OferenteCreate": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "apellido": {
+            "type": "string",
+            "title": "Apellido"
+          },
+          "dni_cuit": {
+            "type": "string",
+            "title": "Dni Cuit"
+          },
+          "telefono": {
+            "type": "string",
+            "title": "Telefono"
+          },
+          "categoria_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria Id"
+          },
+          "numero_matricula": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Matricula"
+          },
+          "latitud": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitud"
+          },
+          "longitud": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitud"
+          },
+          "radio_cobertura_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radio Cobertura Km"
+          },
+          "hora_inicio_atencion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora Inicio Atencion"
+          },
+          "hora_fin_atencion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora Fin Atencion"
+          },
+          "disponible_emergencia": {
+            "type": "boolean",
+            "title": "Disponible Emergencia",
+            "default": false
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre",
+          "apellido",
+          "dni_cuit",
+          "telefono"
+        ],
+        "title": "OferenteCreate",
+        "example": {
+          "apellido": "Pérez",
+          "categoria_id": 1,
+          "descripcion": "Electricista matriculado, más de 10 años de experiencia.",
+          "disponible_emergencia": true,
+          "dni_cuit": "20-30111222-3",
+          "nombre": "Juan",
+          "numero_matricula": "EL-12345",
+          "telefono": "+54 3564 400111"
+        }
+      },
+      "OferenteOut": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "apellido": {
+            "type": "string",
+            "title": "Apellido"
+          },
+          "dni_cuit": {
+            "type": "string",
+            "title": "Dni Cuit"
+          },
+          "telefono": {
+            "type": "string",
+            "title": "Telefono"
+          },
+          "categoria_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria Id"
+          },
+          "numero_matricula": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Matricula"
+          },
+          "latitud": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitud"
+          },
+          "longitud": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitud"
+          },
+          "radio_cobertura_km": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radio Cobertura Km"
+          },
+          "hora_inicio_atencion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora Inicio Atencion"
+          },
+          "hora_fin_atencion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora Fin Atencion"
+          },
+          "disponible_emergencia": {
+            "type": "boolean",
+            "title": "Disponible Emergencia",
+            "default": false
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "id_oferente": {
+            "type": "integer",
+            "title": "Id Oferente"
+          },
+          "estado_verificacion": {
+            "type": "string",
+            "title": "Estado Verificacion"
+          },
+          "promedio_calificacion": {
+            "type": "string",
+            "title": "Promedio Calificacion"
+          },
+          "cantidad_rechazos_acumulados": {
+            "type": "integer",
+            "title": "Cantidad Rechazos Acumulados"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre",
+          "apellido",
+          "dni_cuit",
+          "telefono",
+          "id_oferente",
+          "estado_verificacion",
+          "promedio_calificacion",
+          "cantidad_rechazos_acumulados"
+        ],
+        "title": "OferenteOut"
+      },
+      "OferenteUpdate": {
+        "properties": {
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre"
+          },
+          "apellido": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apellido"
+          },
+          "telefono": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono"
+          },
+          "categoria_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria Id"
+          },
+          "numero_matricula": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Matricula"
+          },
+          "latitud": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitud"
+          },
+          "longitud": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitud"
+          },
+          "radio_cobertura_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radio Cobertura Km"
+          },
+          "hora_inicio_atencion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora Inicio Atencion"
+          },
+          "hora_fin_atencion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora Fin Atencion"
+          },
+          "disponible_emergencia": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disponible Emergencia"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          }
+        },
+        "type": "object",
+        "title": "OferenteUpdate"
+      },
+      "ResenaAdminOut": {
+        "properties": {
+          "id_resena": {
+            "type": "integer",
+            "title": "Id Resena"
+          },
+          "oferente_id": {
+            "type": "integer",
+            "title": "Oferente Id"
+          },
+          "solicitud_id": {
+            "type": "integer",
+            "title": "Solicitud Id"
+          },
+          "nombre_cliente": {
+            "type": "string",
+            "title": "Nombre Cliente"
+          },
+          "calificaciones_comentarios": {
+            "type": "object",
+            "title": "Calificaciones Comentarios"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado",
+            "description": "Pendiente_Aprobacion | Aprobada | Rechazada"
+          },
+          "fecha_creacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Creacion"
+          },
+          "contacto_cliente_ingresado": {
+            "type": "string",
+            "title": "Contacto Cliente Ingresado"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_resena",
+          "oferente_id",
+          "solicitud_id",
+          "nombre_cliente",
+          "calificaciones_comentarios",
+          "estado",
+          "fecha_creacion",
+          "contacto_cliente_ingresado"
+        ],
+        "title": "ResenaAdminOut"
+      },
+      "ResenaCreate": {
+        "properties": {
+          "codigo_unico": {
+            "type": "string",
+            "title": "Codigo Unico",
+            "description": "Código recibido en el enlace/QR generado por el Oferente."
+          },
+          "nombre_cliente": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 2,
+            "title": "Nombre Cliente"
+          },
+          "contacto_cliente_ingresado": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 3,
+            "title": "Contacto Cliente Ingresado",
+            "description": "WhatsApp o email del cliente que deja la reseña."
+          },
+          "calificaciones_comentarios": {
+            "$ref": "#/components/schemas/CalificacionesComentariosIn"
+          }
+        },
+        "type": "object",
+        "required": [
+          "codigo_unico",
+          "nombre_cliente",
+          "contacto_cliente_ingresado",
+          "calificaciones_comentarios"
+        ],
+        "title": "ResenaCreate",
+        "example": {
+          "calificaciones_comentarios": {
+            "comentario": "Excelente trabajo, muy prolijo y llegó puntual.",
+            "criterios": {
+              "atencion": 5,
+              "calidad": 5,
+              "precio": 4,
+              "puntualidad": 4
+            },
+            "puntuacion_global": 5
+          },
+          "codigo_unico": "a1b2c3d4e5f6...",
+          "contacto_cliente_ingresado": "juan.cliente@example.com",
+          "nombre_cliente": "Juan Cliente"
+        }
+      },
+      "ResenaModeracion": {
+        "properties": {
+          "aprobar": {
+            "type": "boolean",
+            "title": "Aprobar",
+            "description": "true = aprobar y publicar la reseña; false = rechazarla."
+          }
+        },
+        "type": "object",
+        "required": [
+          "aprobar"
+        ],
+        "title": "ResenaModeracion",
+        "example": {
+          "aprobar": true
+        }
+      },
+      "ResenaOut": {
+        "properties": {
+          "id_resena": {
+            "type": "integer",
+            "title": "Id Resena"
+          },
+          "oferente_id": {
+            "type": "integer",
+            "title": "Oferente Id"
+          },
+          "solicitud_id": {
+            "type": "integer",
+            "title": "Solicitud Id"
+          },
+          "nombre_cliente": {
+            "type": "string",
+            "title": "Nombre Cliente"
+          },
+          "calificaciones_comentarios": {
+            "type": "object",
+            "title": "Calificaciones Comentarios"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado",
+            "description": "Pendiente_Aprobacion | Aprobada | Rechazada"
+          },
+          "fecha_creacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Creacion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_resena",
+          "oferente_id",
+          "solicitud_id",
+          "nombre_cliente",
+          "calificaciones_comentarios",
+          "estado",
+          "fecha_creacion"
+        ],
+        "title": "ResenaOut"
+      },
+      "RolUsuario": {
+        "type": "string",
+        "enum": [
+          "Oferente",
+          "Administrador"
+        ],
+        "title": "RolUsuario"
+      },
+      "SolicitudResenaCreate": {
+        "properties": {
+          "contacto_referencia_cliente": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 3,
+            "title": "Contacto Referencia Cliente",
+            "description": "Contacto (nombre y WhatsApp o email) del cliente al que se le va a enviar el enlace de reseña."
+          }
+        },
+        "type": "object",
+        "required": [
+          "contacto_referencia_cliente"
+        ],
+        "title": "SolicitudResenaCreate",
+        "example": {
+          "contacto_referencia_cliente": "Juan Cliente - +54 9 11 5555-1234"
+        }
+      },
+      "SolicitudResenaOut": {
+        "properties": {
+          "id_solicitud": {
+            "type": "integer",
+            "title": "Id Solicitud"
+          },
+          "oferente_id": {
+            "type": "integer",
+            "title": "Oferente Id"
+          },
+          "codigo_unico": {
+            "type": "string",
+            "title": "Codigo Unico",
+            "description": "Código único a incluir en el link/QR que se comparte con el cliente."
+          },
+          "contacto_referencia_cliente": {
+            "type": "string",
+            "title": "Contacto Referencia Cliente"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado",
+            "description": "Pendiente_Uso | Utilizada | Expirada"
+          },
+          "fecha_generacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Generacion"
+          },
+          "fecha_expiracion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Expiracion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_solicitud",
+          "oferente_id",
+          "codigo_unico",
+          "contacto_referencia_cliente",
+          "estado",
+          "fecha_generacion"
+        ],
+        "title": "SolicitudResenaOut"
+      },
+      "Token": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token"
+        ],
+        "title": "Token"
+      },
+      "UsuarioCreate": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "UsuarioCreate",
+        "example": {
+          "email": "juan.perez@offix.test",
+          "password": "Offix2026!"
+        }
+      },
+      "UsuarioLogin": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "UsuarioLogin",
+        "example": {
+          "email": "juan.perez@offix.test",
+          "password": "Offix2026!"
+        }
+      },
+      "UsuarioOut": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "id_usuario": {
+            "type": "integer",
+            "title": "Id Usuario"
+          },
+          "rol": {
+            "$ref": "#/components/schemas/RolUsuario"
+          },
+          "estado_cuenta": {
+            "type": "string",
+            "title": "Estado Cuenta"
+          },
+          "fecha_registro": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Registro"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "id_usuario",
+          "rol",
+          "estado_cuenta",
+          "fecha_registro"
+        ],
+        "title": "UsuarioOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "OAuth2PasswordBearer": {
+        "type": "oauth2",
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "/api/v1/auth/login"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Autenticación",
+      "description": "Registro, inicio y cierre de sesión de Oferentes (RF1, RF4, HU-03)."
+    },
+    {
+      "name": "Oferentes",
+      "description": "Perfiles profesionales: alta, edición, búsqueda y consulta pública (RF2, RF7, RF8, HU-02)."
+    },
+    {
+      "name": "Categorías",
+      "description": "Rubros/oficios disponibles en la plataforma (RF18)."
+    },
+    {
+      "name": "Reseñas",
+      "description": "Flujo de calificaciones y reseñas vía link/QR único (RF10-RF13, HU-01)."
+    },
+    {
+      "name": "Administración",
+      "description": "Gestión de usuarios, verificación de matrícula, alertas y moderación (RF14-RF18)."
+    }
+  ]
+}

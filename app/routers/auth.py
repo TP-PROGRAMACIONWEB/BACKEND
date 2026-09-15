@@ -10,9 +10,20 @@ from app.schemas.usuario import Token, UsuarioCreate, UsuarioLogin, UsuarioOut
 router = APIRouter(prefix="/api/v1/auth", tags=["Autenticación"])
 
 
-@router.post("/registro", response_model=UsuarioOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/registro",
+    response_model=UsuarioOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Registrar un nuevo usuario",
+    responses={409: {"description": "El email ya está registrado"}},
+)
 def registrar_usuario(payload: UsuarioCreate, db: Session = Depends(get_db)):
-    """RF1/RF4 — Registro de nuevos usuarios Oferentes."""
+    """RF1/RF4 — Registro de nuevos usuarios Oferentes.
+
+    Crea el Usuario (rol Oferente por defecto). Para poder generar/aprobar
+    reseñas o gestionar un perfil profesional, después hay que crear el
+    perfil con `POST /api/v1/oferentes` usando el token devuelto por `/login`.
+    """
     if db.query(Usuario).filter(Usuario.email == payload.email).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El email ya está registrado")
 
@@ -23,9 +34,21 @@ def registrar_usuario(payload: UsuarioCreate, db: Session = Depends(get_db)):
     return usuario
 
 
-@router.post("/login", response_model=Token)
+@router.post(
+    "/login",
+    response_model=Token,
+    summary="Iniciar sesión",
+    responses={
+        401: {"description": "Email o contraseña incorrectos"},
+        403: {"description": "La cuenta está suspendida o bloqueada"},
+    },
+)
 def login(payload: UsuarioLogin, db: Session = Depends(get_db)):
-    """RF4 — Inicio de sesión."""
+    """RF4 — Inicio de sesión.
+
+    Devuelve un JWT (`access_token`). Enviarlo en cada request protegida como
+    header `Authorization: Bearer <token>`.
+    """
     usuario = db.query(Usuario).filter(Usuario.email == payload.email).first()
     if not usuario or not verify_password(payload.password, usuario.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales inválidas")
@@ -37,7 +60,12 @@ def login(payload: UsuarioLogin, db: Session = Depends(get_db)):
     return Token(access_token=token)
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Cerrar sesión",
+    responses={401: {"description": "Token faltante, inválido o expirado"}},
+)
 def logout(usuario: Usuario = Depends(get_current_user)):
     """HU-03 T03 — El JWT es stateless y no hay tabla de sesiones/blacklist en el
     DER acordado con la PM, así que no se revoca el token en el servidor. Este

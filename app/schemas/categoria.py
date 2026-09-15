@@ -7,7 +7,11 @@ class CategoriaBase(BaseModel):
 
 
 class CategoriaCreate(CategoriaBase):
-    pass
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"nombre": "Electricista", "descripcion": "Instalaciones y reparaciones eléctricas."}
+        }
+    )
 
 
 class CategoriaUpdate(BaseModel):

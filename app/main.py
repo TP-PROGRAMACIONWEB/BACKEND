@@ -7,19 +7,35 @@ from app.models import alerta_admin, archivo_adjunto, categoria, oferente, resen
 from app.routers import admin, auth, categorias, oferentes, resenas
 
 tags_metadata = [
-    {"name": "Autenticación", "description": "Registro, inicio y cierre de sesión de Oferentes (RF1, RF4)."},
-    {"name": "Oferentes", "description": "Perfiles profesionales: alta, edición, búsqueda y consulta pública (RF2, RF7, RF8)."},
+    {"name": "Autenticación", "description": "Registro, inicio y cierre de sesión de Oferentes (RF1, RF4, HU-03)."},
+    {"name": "Oferentes", "description": "Perfiles profesionales: alta, edición, búsqueda y consulta pública (RF2, RF7, RF8, HU-02)."},
     {"name": "Categorías", "description": "Rubros/oficios disponibles en la plataforma (RF18)."},
-    {"name": "Reseñas", "description": "Flujo de calificaciones y reseñas vía link/QR único (RF10-RF13)."},
-    {"name": "Administración", "description": "Gestión de usuarios, alertas y moderación (RF14-RF18)."},
+    {"name": "Reseñas", "description": "Flujo de calificaciones y reseñas vía link/QR único (RF10-RF13, HU-01)."},
+    {"name": "Administración", "description": "Gestión de usuarios, verificación de matrícula, alertas y moderación (RF14-RF18)."},
 ]
 
 app = FastAPI(
     title="Offix API",
-    description="API REST del backend de Offix, red social de oficios.",
+    description=(
+        "API REST del backend de Offix, red social de oficios (UTN FRSF).\n\n"
+        "### Cómo autenticarse\n"
+        "1. `POST /api/v1/auth/registro` para crear un usuario.\n"
+        "2. `POST /api/v1/auth/login` para obtener un `access_token` (JWT).\n"
+        "3. Enviarlo en cada request protegida como header `Authorization: Bearer <access_token>` "
+        "(en Swagger UI: botón **Authorize**, arriba a la derecha).\n\n"
+        "### Para el equipo de QA (Hoppscotch)\n"
+        "El spec completo también está disponible en `/openapi.json` y como archivo estático en "
+        "`docs/openapi.json` del repo — se puede importar directo en Hoppscotch como colección.\n\n"
+        "### Estado del proyecto\n"
+        "Sprint 1 — flujo de reseña (HU-01) con validación de enlace simulada, sin envío real de "
+        "mail/WhatsApp. Ver `docs/plan-sprint-1.md` para el detalle de alcance y decisiones."
+    ),
     version="0.1.0",
     openapi_tags=tags_metadata,
     contact={"name": "Equipo Offix - UTN FRSF"},
+    servers=[
+        {"url": "http://localhost:8000", "description": "Entorno local (iniciar_backend.bat)"},
+    ],
 )
 
 app.add_middleware(
@@ -42,6 +58,6 @@ def on_startup():
     Base.metadata.create_all(bind=engine)
 
 
-@app.get("/health", tags=["Salud"])
+@app.get("/health", tags=["Salud"], summary="Chequeo de salud del servicio")
 def health_check():
     return {"status": "ok"}

@@ -34,6 +34,13 @@ def _verificar_propietario(oferente: Oferente, usuario: Usuario):
     response_model=SolicitudResenaOut,
     status_code=status.HTTP_201_CREATED,
     tags=["Reseñas"],
+    summary="Generar enlace de reseña (paso 1 del flujo HU-01)",
+    responses={
+        401: {"description": "Falta token o es inválido"},
+        403: {"description": "El oferente autenticado no es el dueño del perfil"},
+        404: {"description": "Oferente no encontrado"},
+        422: {"description": "Falta contacto_referencia_cliente o es inválido"},
+    },
 )
 def generar_solicitud_resena(
     oferente_id: int,
@@ -41,8 +48,13 @@ def generar_solicitud_resena(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ):
-    """RF10 — El Oferente genera el link/QR único de reseña, indicando el
-    contacto de referencia del cliente al que se lo va a enviar."""
+    """RF10 — El Oferente (logueado) genera el link/QR único de reseña, indicando
+    el contacto de referencia del cliente al que se lo va a enviar.
+
+    Sprint 1: el envío del enlace es **simulado** — no se manda mail/WhatsApp
+    real todavía. El `codigo_unico` devuelto en la respuesta es el dato que hay
+    que pegar en `POST /api/v1/resenas` (o codificar en un QR) para simular el
+    link que recibiría el cliente."""
     oferente = db.get(Oferente, oferente_id)
     if not oferente:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Oferente no encontrado")
@@ -59,9 +71,21 @@ def generar_solicitud_resena(
     return solicitud
 
 
-@router.post("/resenas", response_model=ResenaOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/resenas",
+    response_model=ResenaOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Registrar una reseña (paso 2 del flujo HU-01, público, sin login)",
+    responses={
+        400: {"description": "codigo_unico inexistente o ya utilizado"},
+        422: {"description": "Falta un campo obligatorio o un criterio está fuera de 1-5"},
+    },
+)
 def registrar_resena(payload: ResenaCreate, db: Session = Depends(get_db)):
-    """RF10 — El cliente deja la reseña accediendo exclusivamente vía link único, sin login."""
+    """RF10 — El cliente deja la reseña accediendo exclusivamente vía el
+    `codigo_unico` recibido en el enlace/QR, sin necesidad de loguearse. Queda
+    en estado `Pendiente_Aprobacion` hasta que el Oferente la modere
+    (`PATCH /resenas/{id}/moderar`)."""
     solicitud = db.query(SolicitudResena).filter(SolicitudResena.codigo_unico == payload.codigo_unico).first()
     if not solicitud or solicitud.estado != EstadoSolicitud.PENDIENTE_USO:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Enlace de reseña inválido o ya utilizado")
@@ -81,9 +105,14 @@ def registrar_resena(payload: ResenaCreate, db: Session = Depends(get_db)):
     return resena
 
 
-@router.get("/oferentes/{oferente_id}/resenas", response_model=list[ResenaOut])
+@router.get(
+    "/oferentes/{oferente_id}/resenas",
+    response_model=list[ResenaOut],
+    summary="Listar reseñas aprobadas de un oferente (público)",
+)
 def listar_resenas_publicas(oferente_id: int, db: Session = Depends(get_db)):
-    """RF7 — Reseñas aprobadas visibles en el perfil público."""
+    """RF7 — Solo devuelve reseñas en estado `Aprobada`; las pendientes y
+    rechazadas no son visibles públicamente."""
     return (
         db.query(Resena)
         .filter(Resena.oferente_id == oferente_id, Resena.estado == EstadoResena.APROBADA)
@@ -92,14 +121,26 @@ def listar_resenas_publicas(oferente_id: int, db: Session = Depends(get_db)):
     )
 
 
-@router.patch("/resenas/{resena_id}/moderar", response_model=ResenaOut)
+@router.patch(
+    "/resenas/{resena_id}/moderar",
+    response_model=ResenaOut,
+    summary="Aprobar o rechazar una reseña pendiente",
+    responses={
+        400: {"description": "La reseña ya fue moderada (no está Pendiente_Aprobacion)"},
+        401: {"description": "Falta token o es inválido"},
+        403: {"description": "El oferente autenticado no es el dueño de la reseña"},
+        404: {"description": "Reseña no encontrada"},
+    },
+)
 def moderar_resena(
     resena_id: int,
     payload: ResenaModeracion,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ):
-    """RF11/RF13 — El Oferente aprueba o rechaza la reseña; controla alertas por rechazos reiterados."""
+    """RF11/RF13 — El Oferente aprueba o rechaza la reseña. Si se rechazan 5 o
+    más de las últimas 10 reseñas del oferente, se genera automáticamente una
+    `AlertaAdministrador` (RF11) visible en `GET /admin/alertas`."""
     resena = db.get(Resena, resena_id)
     if not resena:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reseña no encontrada")
