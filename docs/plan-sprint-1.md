@@ -313,12 +313,12 @@ El camino más rápido es `cargar_datos_prueba.bat`, que deja seis oferentes y u
 # 1. Crear el usuario
 curl -X POST http://localhost:8000/api/v1/auth/registro \
   -H "Content-Type: application/json" \
-  -d '{"email":"nuevo@offix.test","password":"Offix2026!"}'
+  -d '{"email":"nuevo@offix.example.com","password":"Offix2026!"}'
 
 # 2. Obtener el token
 curl -X POST http://localhost:8000/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"nuevo@offix.test","password":"Offix2026!"}'
+  -d '{"email":"nuevo@offix.example.com","password":"Offix2026!"}'
 
 # 3. Crear el perfil profesional (pegar el access_token del paso 2)
 curl -X POST http://localhost:8000/api/v1/oferentes \

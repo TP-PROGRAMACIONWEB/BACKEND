@@ -5,6 +5,10 @@ from app.db.database import Base
 
 
 class EstadoResena:
+    # Solo las reseñas originadas por WhatsApp arrancan sin verificar: el cliente
+    # cargó su mail en la propia vista y todavía no confirmó que sea suyo. Una
+    # reseña en este estado es invisible en todas las vistas y no suma al promedio.
+    PENDIENTE_VERIFICACION = "Pendiente_Verificacion"
     PENDIENTE_APROBACION = "Pendiente_Aprobacion"
     APROBADA = "Aprobada"
     RECHAZADA = "Rechazada"

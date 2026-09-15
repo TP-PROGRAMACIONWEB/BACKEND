@@ -561,8 +561,8 @@
           "Reseñas",
           "Reseñas"
         ],
-        "summary": "Generar enlace de reseña (paso 1 del flujo HU-01)",
-        "description": "RF10 — El Oferente (logueado) genera el link/QR único de reseña, indicando\nel contacto de referencia del cliente al que se lo va a enviar.\n\nSprint 1: el envío del enlace es **simulado** — no se manda mail/WhatsApp\nreal todavía. El `codigo_unico` devuelto en la respuesta es el dato que hay\nque pegar en `POST /api/v1/resenas` (o codificar en un QR) para simular el\nlink que recibiría el cliente.",
+        "summary": "Generar enlace de reseña desde el perfil del oferente",
+        "description": "RF10 — El Oferente (logueado) genera el enlace único de reseña para\ncompartirlo con su cliente.\n\nNo recibe datos del cliente: en este camino el Oferente elige el contacto\ndentro de WhatsApp, así que el sistema no sabe a quién se lo mandó. Esos\ndatos los carga el propio cliente al completar la reseña.\n\nFase 4 del plan: este endpoint se muda a `/whatsapp` y pasa a devolver\ntambién la URL de WhatsApp ya armada con el texto predefinido.",
         "operationId": "generar_solicitud_resena_api_v1_oferentes__oferente_id__solicitudes_resena_post",
         "security": [
           {
@@ -580,16 +580,6 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SolicitudResenaCreate"
-              }
-            }
-          }
-        },
         "responses": {
           "201": {
             "description": "Successful Response",
@@ -611,7 +601,14 @@
             "description": "Oferente no encontrado"
           },
           "422": {
-            "description": "Falta contacto_referencia_cliente o es inválido"
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
@@ -1087,13 +1084,6 @@
     "schemas": {
       "CalificacionesComentariosIn": {
         "properties": {
-          "puntuacion_global": {
-            "type": "integer",
-            "maximum": 5.0,
-            "minimum": 1.0,
-            "title": "Puntuacion Global",
-            "description": "Puntuación global de la reseña, 1 a 5."
-          },
           "criterios": {
             "$ref": "#/components/schemas/CriteriosValoracion"
           },
@@ -1113,19 +1103,18 @@
         },
         "type": "object",
         "required": [
-          "puntuacion_global",
           "criterios"
         ],
         "title": "CalificacionesComentariosIn",
+        "description": "Lo que carga el cliente. La puntuación global no viaja en el request: la\ncalcula el backend como promedio de los cuatro criterios.",
         "example": {
           "comentario": "Excelente trabajo, muy prolijo y llegó puntual.",
           "criterios": {
-            "atencion": 5,
+            "atencion": 4.5,
             "calidad": 5,
             "precio": 4,
-            "puntualidad": 4
-          },
-          "puntuacion_global": 5
+            "puntualidad": 4.5
+          }
         }
       },
       "CategoriaCreate": {
@@ -1232,32 +1221,36 @@
       "CriteriosValoracion": {
         "properties": {
           "precio": {
-            "type": "integer",
+            "type": "number",
+            "multipleOf": 0.5,
             "maximum": 5.0,
-            "minimum": 1.0,
+            "minimum": 0.5,
             "title": "Precio",
-            "description": "Puntuación 1-5 por el precio del servicio."
+            "description": "Puntuación de 0.5 a 5 (media estrella) por el precio."
           },
           "calidad": {
-            "type": "integer",
+            "type": "number",
+            "multipleOf": 0.5,
             "maximum": 5.0,
-            "minimum": 1.0,
+            "minimum": 0.5,
             "title": "Calidad",
-            "description": "Puntuación 1-5 por la calidad/ejecución del trabajo."
+            "description": "Puntuación de 0.5 a 5 por la calidad del trabajo."
           },
           "atencion": {
-            "type": "integer",
+            "type": "number",
+            "multipleOf": 0.5,
             "maximum": 5.0,
-            "minimum": 1.0,
+            "minimum": 0.5,
             "title": "Atencion",
-            "description": "Puntuación 1-5 por el trato/atención al cliente."
+            "description": "Puntuación de 0.5 a 5 por el trato al cliente."
           },
           "puntualidad": {
-            "type": "integer",
+            "type": "number",
+            "multipleOf": 0.5,
             "maximum": 5.0,
-            "minimum": 1.0,
+            "minimum": 0.5,
             "title": "Puntualidad",
-            "description": "Puntuación 1-5 por la puntualidad/cumplimiento de horarios."
+            "description": "Puntuación de 0.5 a 5 por el cumplimiento de horarios."
           }
         },
         "additionalProperties": false,
@@ -1270,10 +1263,10 @@
         ],
         "title": "CriteriosValoracion",
         "example": {
-          "atencion": 5,
+          "atencion": 4.5,
           "calidad": 5,
           "precio": 4,
-          "puntualidad": 4
+          "puntualidad": 4.5
         }
       },
       "EstadoCuentaEnum": {
@@ -1577,6 +1570,10 @@
           "cantidad_rechazos_acumulados": {
             "type": "integer",
             "title": "Cantidad Rechazos Acumulados"
+          },
+          "notificaciones_email_habilitadas": {
+            "type": "boolean",
+            "title": "Notificaciones Email Habilitadas"
           }
         },
         "type": "object",
@@ -1588,7 +1585,8 @@
           "id_oferente",
           "estado_verificacion",
           "promedio_calificacion",
-          "cantidad_rechazos_acumulados"
+          "cantidad_rechazos_acumulados",
+          "notificaciones_email_habilitadas"
         ],
         "title": "OferenteOut"
       },
@@ -1736,6 +1734,18 @@
               }
             ],
             "title": "Descripcion"
+          },
+          "notificaciones_email_habilitadas": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notificaciones Email Habilitadas",
+            "description": "Si está en false, el oferente deja de recibir avisos por correo de reseñas nuevas."
           }
         },
         "type": "object",
@@ -1766,7 +1776,7 @@
           "estado": {
             "type": "string",
             "title": "Estado",
-            "description": "Pendiente_Aprobacion | Aprobada | Rechazada"
+            "description": "Pendiente_Verificacion | Pendiente_Aprobacion | Aprobada | Rechazada"
           },
           "fecha_creacion": {
             "type": "string",
@@ -1796,7 +1806,7 @@
           "codigo_unico": {
             "type": "string",
             "title": "Codigo Unico",
-            "description": "Código recibido en el enlace/QR generado por el Oferente."
+            "description": "Código del enlace de reseña."
           },
           "nombre_cliente": {
             "type": "string",
@@ -1809,7 +1819,7 @@
             "maxLength": 100,
             "minLength": 3,
             "title": "Contacto Cliente Ingresado",
-            "description": "WhatsApp o email del cliente que deja la reseña."
+            "description": "Mail del cliente que deja la reseña."
           },
           "calificaciones_comentarios": {
             "$ref": "#/components/schemas/CalificacionesComentariosIn"
@@ -1827,14 +1837,13 @@
           "calificaciones_comentarios": {
             "comentario": "Excelente trabajo, muy prolijo y llegó puntual.",
             "criterios": {
-              "atencion": 5,
+              "atencion": 4.5,
               "calidad": 5,
               "precio": 4,
-              "puntualidad": 4
-            },
-            "puntuacion_global": 5
+              "puntualidad": 4.5
+            }
           },
-          "codigo_unico": "a1b2c3d4e5f6...",
+          "codigo_unico": "a1b2c3d4e5f6",
           "contacto_cliente_ingresado": "juan.cliente@example.com",
           "nombre_cliente": "Juan Cliente"
         }
@@ -1881,7 +1890,7 @@
           "estado": {
             "type": "string",
             "title": "Estado",
-            "description": "Pendiente_Aprobacion | Aprobada | Rechazada"
+            "description": "Pendiente_Verificacion | Pendiente_Aprobacion | Aprobada | Rechazada"
           },
           "fecha_creacion": {
             "type": "string",
@@ -1909,25 +1918,6 @@
         ],
         "title": "RolUsuario"
       },
-      "SolicitudResenaCreate": {
-        "properties": {
-          "contacto_referencia_cliente": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 3,
-            "title": "Contacto Referencia Cliente",
-            "description": "Contacto (nombre y WhatsApp o email) del cliente al que se le va a enviar el enlace de reseña."
-          }
-        },
-        "type": "object",
-        "required": [
-          "contacto_referencia_cliente"
-        ],
-        "title": "SolicitudResenaCreate",
-        "example": {
-          "contacto_referencia_cliente": "Juan Cliente - +54 9 11 5555-1234"
-        }
-      },
       "SolicitudResenaOut": {
         "properties": {
           "id_solicitud": {
@@ -1941,11 +1931,35 @@
           "codigo_unico": {
             "type": "string",
             "title": "Codigo Unico",
-            "description": "Código único a incluir en el link/QR que se comparte con el cliente."
+            "description": "Código único que identifica el enlace de reseña."
           },
-          "contacto_referencia_cliente": {
+          "origen": {
             "type": "string",
-            "title": "Contacto Referencia Cliente"
+            "title": "Origen",
+            "description": "Cliente_Email | Oferente_WhatsApp"
+          },
+          "nombre_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Cliente",
+            "description": "Solo viene cargado si el enlace lo pidió el cliente por correo."
+          },
+          "email_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Cliente"
           },
           "estado": {
             "type": "string",
@@ -1975,7 +1989,7 @@
           "id_solicitud",
           "oferente_id",
           "codigo_unico",
-          "contacto_referencia_cliente",
+          "origen",
           "estado",
           "fecha_generacion"
         ],
@@ -2018,7 +2032,7 @@
         ],
         "title": "UsuarioCreate",
         "example": {
-          "email": "juan.perez@offix.test",
+          "email": "juan.perez@offix.example.com",
           "password": "Offix2026!"
         }
       },
@@ -2041,7 +2055,7 @@
         ],
         "title": "UsuarioLogin",
         "example": {
-          "email": "juan.perez@offix.test",
+          "email": "juan.perez@offix.example.com",
           "password": "Offix2026!"
         }
       },

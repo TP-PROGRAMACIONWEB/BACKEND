@@ -2,7 +2,7 @@ import re
 from datetime import time
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 DNI_CUIT_RE = re.compile(r"^[0-9-]{6,50}$")
 TELEFONO_RE = re.compile(r"^[0-9+\s]{6,50}$")
@@ -68,6 +68,9 @@ class OferenteUpdate(BaseModel):
     hora_fin_atencion: time | None = None
     disponible_emergencia: bool | None = None
     descripcion: str | None = None
+    notificaciones_email_habilitadas: bool | None = Field(
+        default=None, description="Si está en false, el oferente deja de recibir avisos por correo de reseñas nuevas."
+    )
 
     @field_validator("telefono")
     @classmethod
@@ -84,3 +87,4 @@ class OferenteOut(OferenteBase):
     estado_verificacion: str
     promedio_calificacion: Decimal
     cantidad_rechazos_acumulados: int
+    notificaciones_email_habilitadas: bool

@@ -41,17 +41,29 @@ python -m app.scripts.export_openapi
 - La validación de matrícula (HU-02) es simulada, vía `PATCH /admin/oferentes/{id}/verificacion`.
 - El logout es stateless (no hay revocación real de tokens del lado del servidor).
 
-## ⚠️ El flujo de reseña está por cambiar
+## El flujo de reseña se está construyendo por fases
 
-El equipo redefinió el caso de uso de HU-01 (ver [`plan-sprint-1.md`](plan-sprint-1.md), revisión 2). **El spec actual todavía refleja el flujo viejo**, así que los endpoints de reseña van a cambiar de contrato antes del cierre del sprint:
+El equipo redefinió el caso de uso de HU-01 (ver [`plan-sprint-1.md`](plan-sprint-1.md), revisión 3): hay **dos caminos** para pedir una reseña, uno que inicia el cliente por correo y otro que inicia el profesional por WhatsApp.
+
+**Ya implementado (Fases 1 y 2):**
+
+| Cambio | Detalle |
+|---|---|
+| `POST /oferentes/{id}/solicitudes-resena` | Ya no recibe body. Es el camino del oferente y marca `origen = Oferente_WhatsApp` |
+| `POST /resenas` | Las puntuaciones son decimales de 0.5 a 5 en pasos de media estrella, y `puntuacion_global` ya **no se manda**: la calcula el backend como promedio de los 4 criterios |
+| `PUT /oferentes/{id}` | Acepta `notificaciones_email_habilitadas` |
+| Servicio de correo | Integrado con Brevo, todavía sin conectar a los endpoints |
+
+**Todavía por venir (Fases 3 y 4):**
 
 | Endpoint | Cambio previsto |
 |---|---|
-| `POST /oferentes/{id}/solicitudes-resena` | Pasa a ser público (hoy exige token de oferente) y cambia el body a `{nombre_cliente, email_cliente}` |
-| `POST /resenas` | Deja de recibir `nombre_cliente` y `contacto_cliente_ingresado`; las puntuaciones pasan de enteros 1-5 a decimales 0.5-5 |
-| `GET /solicitudes-resena/{codigo}` | Nuevo, público |
+| `POST /oferentes/{id}/solicitudes-resena` | Pasa a ser el camino público del cliente, con body `{nombre_cliente, email_cliente}` y envío del enlace por correo |
+| `POST /oferentes/{id}/solicitudes-resena/whatsapp` | Nuevo: el camino del oferente se muda acá y suma la `whatsapp_url` ya armada |
+| `GET /solicitudes-resena/{codigo}` | Nuevo, público: alimenta la vista de reseña |
+| `POST /resenas/verificar` | Nuevo: confirma una reseña del flujo por WhatsApp |
 | `GET /resenas/pendientes` | Nuevo, para el oferente autenticado |
 
-Conviene esperar a que se implementen antes de escribir los casos de prueba definitivos de reseñas. Los endpoints de autenticación, oferentes, categorías y administración no se ven afectados y ya son estables.
+Los endpoints de autenticación, oferentes, categorías y administración ya son estables.
 
 Ver [`docs/plan-sprint-1.md`](plan-sprint-1.md) para el detalle completo de decisiones y alcance.

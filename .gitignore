@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 .env
 .pytest_cache/
+
+# Base de datos local de desarrollo: se regenera con cargar_datos_prueba.bat
+*.db

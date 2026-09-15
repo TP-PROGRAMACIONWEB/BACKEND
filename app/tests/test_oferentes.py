@@ -85,6 +85,29 @@ def test_crear_perfil_formato_invalido_422(client, db_session):
     assert response.status_code == 422
 
 
+def test_perfil_nuevo_tiene_las_notificaciones_activadas(client, db_session):
+    _, oferente_id = crear_oferente_completo(client, db_session, email="notif@test.com", dni_cuit="20-88888888-8")
+
+    response = client.get(f"/api/v1/oferentes/{oferente_id}")
+    assert response.status_code == 200
+    assert response.json()["notificaciones_email_habilitadas"] is True
+
+
+def test_oferente_puede_desactivar_las_notificaciones(client, db_session):
+    token, oferente_id = crear_oferente_completo(client, db_session, email="apagar@test.com", dni_cuit="20-99999999-9")
+
+    response = client.put(
+        f"/api/v1/oferentes/{oferente_id}",
+        json={"notificaciones_email_habilitadas": False},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["notificaciones_email_habilitadas"] is False
+
+    # Y el cambio persiste en la consulta pública.
+    assert client.get(f"/api/v1/oferentes/{oferente_id}").json()["notificaciones_email_habilitadas"] is False
+
+
 def test_buscar_oferentes_publico(client, db_session):
     crear_oferente_completo(client, db_session, email="buscable@test.com", dni_cuit="20-77777777-7")
     response = client.get("/api/v1/oferentes")

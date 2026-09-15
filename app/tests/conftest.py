@@ -9,6 +9,7 @@ from app.db.database import Base, get_db
 from app.main import app
 from app.models.categoria import Categoria
 from app.models.usuario import RolUsuario, Usuario
+from app.services.email import EmailServiceFake, get_email_service
 
 TEST_DATABASE_URL = "sqlite://"
 
@@ -32,11 +33,18 @@ def db_session():
 
 
 @pytest.fixture()
-def client(db_session):
+def emails() -> EmailServiceFake:
+    """Doble del servicio de correo: la suite nunca manda un mail real."""
+    return EmailServiceFake()
+
+
+@pytest.fixture()
+def client(db_session, emails):
     def override_get_db():
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_email_service] = lambda: emails
     # El evento de startup real de la app corre create_all contra el engine de
     # producción (Postgres/SQLite del .env) — en tests las tablas ya se crean
     # contra el engine de test en la fixture db_session, así que se desactiva
@@ -96,8 +104,9 @@ def crear_oferente_completo(client, db_session, email: str = "oferente@test.com"
     return token, oferente_id
 
 
+# Promedio de los cuatro criterios = 4.5, que es la puntuación global esperada.
 CRITERIOS_VALIDOS = {
-    "puntuacion_global": 5,
-    "criterios": {"precio": 5, "calidad": 5, "atencion": 5, "puntualidad": 5},
+    "criterios": {"precio": 4, "calidad": 5, "atencion": 4.5, "puntualidad": 4.5},
     "comentario": "Excelente trabajo",
 }
+PUNTUACION_GLOBAL_ESPERADA = 4.5

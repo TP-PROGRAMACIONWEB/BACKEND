@@ -8,13 +8,12 @@ from app.db.database import get_db
 from app.models.alerta_admin import AlertaAdministrador
 from app.models.oferente import Oferente
 from app.models.resena import EstadoResena, Resena
-from app.models.solicitud_resena import EstadoSolicitud, SolicitudResena
+from app.models.solicitud_resena import EstadoSolicitud, OrigenSolicitud, SolicitudResena
 from app.models.usuario import Usuario
 from app.schemas.resena import (
     ResenaCreate,
     ResenaModeracion,
     ResenaOut,
-    SolicitudResenaCreate,
     SolicitudResenaOut,
 )
 
@@ -34,27 +33,27 @@ def _verificar_propietario(oferente: Oferente, usuario: Usuario):
     response_model=SolicitudResenaOut,
     status_code=status.HTTP_201_CREATED,
     tags=["Reseñas"],
-    summary="Generar enlace de reseña (paso 1 del flujo HU-01)",
+    summary="Generar enlace de reseña desde el perfil del oferente",
     responses={
         401: {"description": "Falta token o es inválido"},
         403: {"description": "El oferente autenticado no es el dueño del perfil"},
         404: {"description": "Oferente no encontrado"},
-        422: {"description": "Falta contacto_referencia_cliente o es inválido"},
     },
 )
 def generar_solicitud_resena(
     oferente_id: int,
-    payload: SolicitudResenaCreate,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ):
-    """RF10 — El Oferente (logueado) genera el link/QR único de reseña, indicando
-    el contacto de referencia del cliente al que se lo va a enviar.
+    """RF10 — El Oferente (logueado) genera el enlace único de reseña para
+    compartirlo con su cliente.
 
-    Sprint 1: el envío del enlace es **simulado** — no se manda mail/WhatsApp
-    real todavía. El `codigo_unico` devuelto en la respuesta es el dato que hay
-    que pegar en `POST /api/v1/resenas` (o codificar en un QR) para simular el
-    link que recibiría el cliente."""
+    No recibe datos del cliente: en este camino el Oferente elige el contacto
+    dentro de WhatsApp, así que el sistema no sabe a quién se lo mandó. Esos
+    datos los carga el propio cliente al completar la reseña.
+
+    Fase 4 del plan: este endpoint se muda a `/whatsapp` y pasa a devolver
+    también la URL de WhatsApp ya armada con el texto predefinido."""
     oferente = db.get(Oferente, oferente_id)
     if not oferente:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Oferente no encontrado")
@@ -63,7 +62,7 @@ def generar_solicitud_resena(
     solicitud = SolicitudResena(
         oferente_id=oferente_id,
         codigo_unico=uuid.uuid4().hex,
-        contacto_referencia_cliente=payload.contacto_referencia_cliente,
+        origen=OrigenSolicitud.OFERENTE_WHATSAPP,
     )
     db.add(solicitud)
     db.commit()
@@ -95,7 +94,7 @@ def registrar_resena(payload: ResenaCreate, db: Session = Depends(get_db)):
         solicitud_id=solicitud.id_solicitud,
         nombre_cliente=payload.nombre_cliente,
         contacto_cliente_ingresado=payload.contacto_cliente_ingresado,
-        calificaciones_comentarios=payload.calificaciones_comentarios.model_dump(),
+        calificaciones_comentarios=payload.calificaciones_comentarios.a_json(),
         estado=EstadoResena.PENDIENTE_APROBACION,
     )
     solicitud.estado = EstadoSolicitud.UTILIZADA
