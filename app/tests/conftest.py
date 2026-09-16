@@ -1,15 +1,23 @@
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+import os
 
-from app.core.security import hash_password
-from app.db.database import Base, get_db
-from app.main import app
-from app.models.categoria import Categoria
-from app.models.usuario import RolUsuario, Usuario
-from app.services.email import EmailServiceFake, get_email_service
+# La suite corre siempre sobre SQLite en memoria, aunque el .env apunte a la base
+# en la nube: la variable de entorno le gana al .env, y tiene que estar antes de
+# importar la app porque el engine y el schema de las tablas se deciden al
+# importar `app.db.database`.
+os.environ["DATABASE_URL"] = "sqlite://"
+
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
+
+from app.core.security import hash_password  # noqa: E402
+from app.db.database import Base, get_db  # noqa: E402
+from app.main import app  # noqa: E402
+from app.models.categoria import Categoria  # noqa: E402
+from app.models.usuario import RolUsuario, Usuario  # noqa: E402
+from app.services.email import EmailServiceFake, get_email_service  # noqa: E402
 
 TEST_DATABASE_URL = "sqlite://"
 

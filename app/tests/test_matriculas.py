@@ -319,3 +319,65 @@ def test_requiere_autenticacion(client):
         "/api/v1/oferentes/me/matriculas/validaciones", json={"tipo_profesional": "Gasista", "numero_matricula": "1000008919"}
     )
     assert respuesta.status_code == 401
+
+
+# --- Textos de los criterios de aceptación ------------------------------------
+
+MENSAJE_CA04 = "Su matrícula no fue encontrada en el padrón, revise los datos y vuelva a intentarlo"
+
+
+def test_los_mensajes_son_los_literales_de_los_criterios_de_aceptacion(client, db_session):
+    crear_fila_padron(db_session)
+    token, _ = crear_oferente(client, db_session, "textos@test.com", "Maria Clara", "Alessi", "20-11111111-16")
+    url = "/api/v1/oferentes/me/matriculas/validaciones"
+
+    def validar(numero):
+        return client.post(url, json={"tipo_profesional": "Gasista", "numero_matricula": numero}, headers=auth(token)).json()
+
+    assert validar("1000000001")["mensaje"] == MENSAJE_CA04
+    assert validar("9999999999")["mensaje"] == "No pudimos procesar tu validación en este momento, intentá nuevamente más tarde"
+    assert validar("1000008919")["mensaje"] == "Su matrícula fue fidelizada exitosamente"
+    assert validar("1000008919")["mensaje"] == "Su matrícula ya fue fidelizada"
+
+
+def test_vencida_y_nombre_no_coincide_muestran_el_texto_del_ca04_pero_guardan_el_motivo(client, db_session):
+    crear_fila_padron(db_session, numero="1000008919", vencimiento=date(2020, 1, 1))
+    crear_fila_padron(db_session, numero="1000004305", nombre="ROMERO TATIANA")
+    token, _ = crear_oferente(client, db_session, "ca04@test.com", "Maria Clara", "Alessi", "20-11111111-17")
+    url = "/api/v1/oferentes/me/matriculas/validaciones"
+
+    vencida = client.post(url, json={"tipo_profesional": "Gasista", "numero_matricula": "1000008919"}, headers=auth(token)).json()
+    otro_nombre = client.post(url, json={"tipo_profesional": "Gasista", "numero_matricula": "1000004305"}, headers=auth(token)).json()
+
+    assert vencida["resultado"] == "Vencida" and vencida["mensaje"] == MENSAJE_CA04
+    assert otro_nombre["resultado"] == "Nombre_No_Coincide" and otro_nombre["mensaje"] == MENSAJE_CA04
+    # La notificación de la campana lleva el mismo texto.
+    mensajes = {n["mensaje"] for n in client.get("/api/v1/notificaciones", headers=auth(token)).json()}
+    assert mensajes == {MENSAJE_CA04}
+
+
+# --- Pedido de reemplazo pisado por uno más nuevo -----------------------------
+
+
+def test_un_reemplazo_pisado_cierra_la_notificacion_del_admin(client, db_session):
+    for numero in ("1000008919", "1000004305", "1000002233"):
+        crear_fila_padron(db_session, numero=numero)
+    token, _ = crear_oferente(client, db_session, "pisado@test.com", "Maria Clara", "Alessi", "20-11111111-18")
+    admin_token = login_admin(client, db_session, "adminpisado@test.com")
+    url = "/api/v1/oferentes/me/matriculas/validaciones"
+
+    for numero in ("1000008919", "1000004305", "1000002233"):
+        client.post(url, json={"tipo_profesional": "Gasista", "numero_matricula": numero}, headers=auth(token))
+
+    pedidos = [
+        n for n in client.get("/api/v1/notificaciones", headers=auth(admin_token)).json() if n["tipo"] == "Matricula_Reemplazo_Solicitado"
+    ]
+    estados = {n["numero_matricula_solicitada"]: n["estado"] for n in pedidos}
+    assert estados == {"1000004305": "Leida", "1000002233": "Pendiente"}
+    # El contador del Administrador solo cuenta el pedido vigente.
+    assert client.get("/api/v1/notificaciones/contador", headers=auth(admin_token)).json()["pendientes_de_accion"] == 1
+
+    pisado_id = next(n["validacion_matricula_id"] for n in pedidos if n["numero_matricula_solicitada"] == "1000004305")
+    respuesta = client.patch(f"/api/v1/admin/matriculas/reemplazos/{pisado_id}", json={"autorizar": True}, headers=auth(admin_token))
+    assert respuesta.status_code == 400
+    assert "más nuevo" in respuesta.json()["detail"]

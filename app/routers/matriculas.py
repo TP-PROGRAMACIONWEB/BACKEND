@@ -47,9 +47,12 @@ def crear_validacion(
     usuario: Usuario = Depends(get_current_user),
 ):
     """HU-02 — El Profesional logueado carga tipo y número; la validación es
-    **síncrona**, contra el padrón cargado en la base (con timeout de
-    `settings.matricula_timeout_segundos`, simulado con la matrícula trampa).
-    Devuelve un código de `resultado` con su mensaje; el frontend lo renderiza.
+    **síncrona**, contra el padrón cargado en la base. Devuelve un código de
+    `resultado` con su mensaje; el frontend lo renderiza.
+
+    **Para QA (CA03):** el resultado `Timeout` se obtiene con la matrícula
+    trampa —`9999999999` para Gasista, `999999999` para Aire acondicionado—,
+    que responde al instante, sin esperar ninguna demora real.
     """
     oferente = _oferente_actual(db, usuario)
     validacion = validar_matricula(db, oferente, payload.tipo_profesional, payload.numero_matricula)

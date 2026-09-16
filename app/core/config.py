@@ -27,12 +27,14 @@ class Settings(BaseSettings):
     # Vencimiento del enlace de reseña, en días desde la generación.
     solicitud_resena_dias_validez: int = 7
 
-    # Tiempo máximo de espera de la validación de matrícula (CA03 de HU-02).
-    matricula_timeout_segundos: int = 60
-
-    # Matrícula trampa para que QA pueda probar el resultado Timeout sin
-    # esperar. Se puede desactivar para que no quede disponible en producción.
+    # Matrícula trampa del CA03 de HU-02: la validación consulta el padrón en la
+    # base local y nunca demora, así que el resultado Timeout solo se puede
+    # obtener con los números trampa, que responden al instante (decisión del
+    # equipo, para que QA no tenga que esperar). Desactivarla en producción.
     matricula_trap_habilitada: bool = True
+
+    # Schema de Postgres donde viven las tablas del backend. No aplica a SQLite.
+    database_schema: str = "offix"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

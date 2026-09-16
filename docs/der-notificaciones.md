@@ -5,6 +5,11 @@
 > DER (`DER_Offix.sql`) no se modifica hasta tener el visto bueno.
 >
 > Fecha: 2026-09-15 · Autor: equipo de backend
+>
+> **Actualización 2026-09-16 (Fase 4, HU-02).** Se suman la columna
+> `validacion_matricula_id` y cuatro valores de `tipo`, y se documenta el cierre
+> de los pedidos de reemplazo pisados. La tabla ya existe en la base de Supabase,
+> en el schema `offix` (ver §10); el DER de `public` sigue sin tocarse.
 
 ---
 
@@ -64,6 +69,10 @@ CREATE TABLE NOTIFICACION (
     -- notificaciones de matrícula.
     resena_id         INTEGER       NULL,
 
+    -- Intento de validación de matrícula asociado (HU-02): los avisos al
+    -- Oferente y el pedido de reemplazo al Administrador. NULL en las de reseña.
+    validacion_matricula_id INTEGER NULL,
+
     -- Momento del hecho notificado. Para HU-01 es la fecha en que EL CLIENTE
     -- cargó la reseña, no la de la moderación del Profesional (requisito
     -- explícito de los casos de prueba de QA).
@@ -74,6 +83,10 @@ CREATE TABLE NOTIFICACION (
 
     CONSTRAINT fk_notificacion_usuario
         FOREIGN KEY (usuario_id) REFERENCES USUARIO (id_usuario)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_notificacion_validacion_matricula
+        FOREIGN KEY (validacion_matricula_id) REFERENCES VALIDACION_MATRICULA (id_validacion)
         ON DELETE CASCADE,
 
     CONSTRAINT fk_notificacion_resena
@@ -89,7 +102,11 @@ CREATE TABLE NOTIFICACION (
                         'Matricula_No_Encontrada',
                         'Matricula_Timeout',
                         'Matricula_Ya_Fidelizada',
-                        'Matricula_Reemplazo_Solicitado'))
+                        'Matricula_Vencida',
+                        'Matricula_Nombre_No_Coincide',
+                        'Matricula_Reemplazo_Solicitado',
+                        'Matricula_Reemplazo_Pendiente',
+                        'Matricula_Reemplazo_Resuelto'))
 );
 
 -- Consulta caliente: el contador de la campana y el desplegable de la bandeja.
@@ -124,6 +141,7 @@ fecha_resolucion DATETIME NULL,
 | `requiere_accion` | BOOLEAN | No | Si es `TRUE`, la notificación espera Aceptar/Rechazar y cuenta para el badge de la campana. |
 | `estado` | VARCHAR(50) | No | `Pendiente` / `Aceptada` / `Rechazada` / `Leida`. Ver §5. |
 | `resena_id` | INTEGER | Sí | FK a `RESENA`. Permite resolver la reseña al Aceptar/Rechazar desde la bandeja. |
+| `validacion_matricula_id` | INTEGER | Sí | FK a `VALIDACION_MATRICULA`. Permite al Administrador resolver el pedido de reemplazo desde la bandeja, y muestra la matrícula vigente y la solicitada. |
 | `fecha_creacion` | TIMESTAMP | No | Fecha y hora del hecho notificado. Es la que se muestra en la esquina superior derecha de la tarjeta. |
 | `fecha_resolucion` | TIMESTAMP | Sí | Fecha y hora en que el usuario tomó la decisión. |
 
@@ -138,7 +156,14 @@ fecha_resolucion DATETIME NULL,
 | `Matricula_No_Encontrada` | HU-02 | Oferente | No |
 | `Matricula_Timeout` | HU-02 | Oferente | No |
 | `Matricula_Ya_Fidelizada` | HU-02 | Oferente | No |
+| `Matricula_Vencida` | HU-02 | Oferente | No — muestra el texto del CA04 |
+| `Matricula_Nombre_No_Coincide` | HU-02 | Oferente | No — muestra el texto del CA04 |
 | `Matricula_Reemplazo_Solicitado` | HU-02 | **Administrador** | **Sí** — Autorizar / Denegar |
+| `Matricula_Reemplazo_Pendiente` | HU-02 | Oferente | No — confirma que el pedido quedó esperando al Administrador |
+| `Matricula_Reemplazo_Resuelto` | HU-02 | Oferente | No — informa si el reemplazo se autorizó o se denegó |
+
+`Vencida` y `Nombre_No_Coincide` tienen tipo propio aunque compartan el texto
+del CA04: así la bandeja y el historial conservan el motivo real.
 
 ---
 
@@ -162,7 +187,11 @@ fecha_resolucion DATETIME NULL,
   Es el resultado de que el Profesional presione *Aceptar* o *Rechazar* en la
   bandeja.
 - **`Leida`** — cierre de las informativas (las de matrícula), cuando el usuario
-  abre la bandeja.
+  abre la bandeja. También cierra un **pedido de reemplazo pisado**: si el
+  Oferente pide otro reemplazo para el mismo oficio antes de que el
+  Administrador resuelva el anterior, el pedido viejo ya no se puede resolver y
+  su notificación pasa a `Leida`. No es `Aceptada` ni `Rechazada` porque el
+  Administrador no decidió nada; el pedido nuevo trae su propia notificación.
 
 **Contador de la campana** = cantidad de filas con
 `usuario_id = <logueado> AND estado = 'Pendiente' AND requiere_accion = TRUE`.
@@ -212,7 +241,10 @@ más, que **no se proponen todavía** porque dependen de definiciones abiertas:
 2. **`VALIDACION_MATRICULA`** — historial de intentos. Se decidió guardar
    **todos** los intentos, incluidos los fallidos, con su resultado.
 
-Se proponen en un documento aparte una vez confirmado el punto §9.1.
+**Actualización:** las dos quedaron implementadas en la Fase 4 (`matriculas` y
+`validaciones_matricula`, más `padron_matriculas` con el padrón cargado), y ya
+existen en el schema `offix` de Supabase. Falta su propuesta formal para el DER
+de la PM.
 
 ---
 
@@ -229,3 +261,13 @@ Se proponen en un documento aparte una vez confirmado el punto §9.1.
    solo mensajes flotantes que no quedan en la base? Los casos de prueba de HU-02
    las describen como flotantes, pero la tarea T04 pide mostrarlas "en el perfil
    del Oferente", lo que sugiere que sí deben persistir.
+
+---
+
+## 10. Dónde vive esta tabla
+
+En la base de Supabase, el schema `public` conserva el DER original de la PM,
+sin cambios. El backend usa un schema propio, **`offix`**, donde están
+`notificaciones` y el resto de sus tablas. Ese schema se modifica **solo con
+migraciones de Alembic** (`migrations/versions/`). Para revisar el SQL exacto de
+un cambio antes de aplicarlo: `alembic upgrade head --sql`.

@@ -35,3 +35,25 @@ def test_postgres_local_no_fuerza_ssl():
 def test_un_sslmode_explicito_en_la_uri_se_respeta():
     opciones = _opciones_engine(normalizar_url(URI_SUPABASE) + "?sslmode=verify-full")
     assert "sslmode" not in opciones["connect_args"]
+
+
+def test_en_postgres_las_tablas_van_al_schema_configurado(monkeypatch):
+    from app.core.config import settings
+    from app.db.database import schema_para
+
+    monkeypatch.setattr(settings, "database_schema", "offix")
+    assert schema_para(normalizar_url(URI_SUPABASE)) == "offix"
+
+
+def test_sqlite_no_usa_schema():
+    from app.db.database import schema_para
+
+    assert schema_para("sqlite:///./offix_dev.db") is None
+
+
+def test_la_suite_corre_sobre_sqlite_sin_schema():
+    """El conftest fuerza SQLite: las tablas no deben quedar calificadas con `offix`."""
+    from app.db.database import DATABASE_SCHEMA, Base
+
+    assert DATABASE_SCHEMA is None
+    assert all(tabla.schema is None for tabla in Base.metadata.sorted_tables)

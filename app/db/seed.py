@@ -13,7 +13,7 @@ from pathlib import Path
 
 from app.core.config import settings
 from app.core.security import hash_password
-from app.db.database import Base, SessionLocal, engine
+from app.db.database import SessionLocal, preparar_esquema
 from app.models import alerta_admin, archivo_adjunto  # noqa: F401 — registran sus mappers
 from app.models.categoria import Categoria
 from app.models.matricula import PadronMatricula, TipoProfesionalMatricula
@@ -248,7 +248,7 @@ def get_or_create_notificacion_pendiente(db, resena: Resena, solicitud: Solicitu
 
 
 def run():
-    Base.metadata.create_all(bind=engine)
+    preparar_esquema()
     db = SessionLocal()
     try:
         categorias = {nombre: get_or_create_categoria(db, nombre, descripcion) for nombre, descripcion in CATEGORIAS}

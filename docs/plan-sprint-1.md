@@ -7,6 +7,14 @@
 > matrícula contra un padrón, y el aviso al Profesional deja de ser por correo
 > para pasar a una **bandeja de notificaciones in-app**.
 > Las revisiones 1 a 3 están en el historial de git.
+>
+> **Revisión 5 (2026-09-16)** — Cierre de la revisión de la Fase 4. Decisiones
+> del equipo: la matrícula trampa del CA03 responde **al instante** (no hay
+> demora real ni timeout de 60 s); los mensajes de HU-02 usan **solo los textos
+> de los criterios de aceptación** (`Vencida` y `Nombre_No_Coincide` muestran el
+> del CA04); y la base de producción es **PostgreSQL en Supabase**, con las
+> tablas en un schema propio (`offix`) manejado **solo con migraciones**. Ver
+> "Base de datos en la nube y migraciones".
 
 ## Contexto
 
@@ -246,16 +254,16 @@ una letra por tipeo (`ALESI`) también pasa, pero un apellido distinto no.
 
 El padrón trae la fecha de vencimiento en la última columna. Una matrícula que
 existe pero está **vencida se trata como inválida**: no se fideliza y el perfil no
-se modifica. ⚠ El mensaje que se muestra está pendiente de definición — ver
-pregunta abierta #2.
+se modifica. Se muestra el mensaje del CA04 (ver "Resultados y mensajes").
 
 #### Matrícula reservada para probar el timeout (CA03)
 
-El padrón vive en la base local, así que la consulta responde en milisegundos y el
-timeout de 60 segundos **nunca se dispararía solo**. Para que QA pueda ejecutar el
-CA03, se reserva una matrícula trampa por tipo, que **no existe en el padrón real**
-y que el backend intercepta antes de consultar, forzando una demora mayor al
-timeout:
+El padrón vive en la base, así que la consulta responde en milisegundos y un
+timeout **nunca se dispararía solo**. Para que QA pueda ejecutar el CA03, se
+reserva una matrícula trampa por tipo, que **no existe en el padrón real** y que
+el backend intercepta antes de consultar, devolviendo `Timeout` **al instante**.
+Por decisión del equipo no se simula ninguna demora: es lo más cómodo para QA, y
+en el backend no existe un timeout real de 60 segundos.
 
 | Tipo de profesional | Matrícula trampa | Dígitos |
 |---|---|---|
@@ -268,8 +276,8 @@ No colisionan con ninguna matrícula del padrón, que arrancan todas con `10000`
 
 **Para QA**: usar ese número en lugar de "simular/forzar que la respuesta demore
 más de 5 minutos". Conviene dejarlo asentado en el campo *Observaciones* del caso
-de prueba. El comportamiento se puede desactivar con una variable de entorno para
-que no quede disponible en un entorno productivo.
+de prueba. El comportamiento se desactiva con `MATRICULA_TRAP_HABILITADA=false`
+para que no quede disponible en un entorno productivo.
 
 ### Reglas de negocio de HU-02
 
@@ -282,7 +290,7 @@ que no quede disponible en un entorno productivo.
 | Identidad | Se valida **el número Y el nombre**: el número tiene que existir en el padrón y el nombre del perfil tiene que coincidir en al menos un **90 %** con el del padrón. Ver "Coincidencia de nombre" |
 | Vencimiento | Una matrícula **vencida se considera inválida**, aunque exista en el padrón |
 | Cantidad de matrículas | Más de una por Profesional (una por oficio) |
-| Tiempo de espera | **60 segundos.** Superado, se responde timeout |
+| Tiempo de espera | Sin timeout real: la consulta es local. El resultado `Timeout` solo se obtiene con la matrícula trampa, que responde al instante |
 | Historial | Se guardan **todos** los intentos, incluidos los fallidos |
 | Revalidación de la misma matrícula | No se modifica nada; se informa "ya fidelizada" |
 | Reemplazo por otra matrícula | Genera una **solicitud de autorización al Administrador**; no se aplica hasta que la autorice. Mientras tanto **sigue vigente la matrícula vieja**: el Profesional conserva el ícono de verificado y el perfil no se modifica |
@@ -299,16 +307,20 @@ backend devuelve un **código de resultado** y el frontend renderiza el mensaje.
 | `No_Encontrada` | "Su matrícula no fue encontrada en el padrón, revise los datos y vuelva a intentarlo" | CA04 |
 | `Timeout` | "No pudimos procesar tu validación en este momento, intentá nuevamente más tarde" | CA03 |
 | `Ya_Fidelizada` | "Su matrícula ya fue fidelizada" | CA06 |
-| `Reemplazo_Solicitado` | *(texto a definir — ver pregunta abierta #2)* | — |
-| `Vencida` | *(texto a definir — ver pregunta abierta #2)* | — |
-| `Nombre_No_Coincide` | *(texto a definir — ver pregunta abierta #2)* | — |
+| `Vencida` | "Su matrícula no fue encontrada en el padrón, revise los datos y vuelva a intentarlo" | CA04 (reusado) |
+| `Nombre_No_Coincide` | "Su matrícula no fue encontrada en el padrón, revise los datos y vuelva a intentarlo" | CA04 (reusado) |
+| `Reemplazo_Solicitado` | *Provisorio, sin CA* — ver pregunta abierta #2 | — |
+
+`Vencida` y `Nombre_No_Coincide` muestran el texto del CA04 por decisión del
+equipo, para no usar textos que QA no tiene. El `resultado` sigue siendo
+distinto, así que el historial conserva el motivo real del rechazo.
 
 Las cinco notificaciones **quedan guardadas en la campana** hasta que el
 Profesional las abre; recién ahí pasan a `Leida`. No son toasts efímeros.
 
-> ⚠ **El CA03 dice 5 minutos; se bajó a 60 segundos** por decisión del equipo.
-> Hay que corregir el texto del criterio de aceptación **y el caso de prueba de
-> QA**, que hoy dice "simular/forzar que la respuesta demore más de 5 minutos".
+> ⚠ **El CA03 dice 5 minutos, pero no hay demora real**: el resultado se obtiene
+> con la matrícula trampa, al instante. Hay que corregir el caso de prueba de QA,
+> que hoy dice "simular/forzar que la respuesta demore más de 5 minutos".
 
 ---
 
@@ -415,6 +427,42 @@ cargado. Se documentan en un anexo propio una vez confirmado el formato de los
 
 ---
 
+## Base de datos en la nube y migraciones
+
+La base de producción es **PostgreSQL en Supabase**. SQLite queda como variante
+local para desarrollo y pruebas, y es la que se usa si no hay `.env`. La suite de
+pytest corre **siempre** sobre SQLite en memoria, aunque el `.env` apunte a la
+nube.
+
+### Schema propio: `offix`
+
+El schema `public` de Supabase ya tenía materializado el DER original de la PM
+(anterior a la revisión 4, con nombres en singular). No se toca: todas las tablas
+del backend viven en un schema aparte, **`offix`**, configurable con
+`DATABASE_SCHEMA`.
+
+### Cada cambio de base es una migración
+
+El schema `offix` se crea y se modifica **solo con migraciones de Alembic**
+(`migrations/`). En Postgres el backend no ejecuta `create_all` al arrancar; en
+SQLite sí, porque ahí no se migra.
+
+Para hacer un cambio de esquema:
+
+1. Modificar los modelos en `app/models/`.
+2. Generar la migración: `alembic revision --autogenerate -m "descripcion"`,
+   con el `.env` apuntando a la nube.
+3. **Revisar el archivo generado** en `migrations/versions/` antes de aplicarlo.
+4. Aplicarla con `migrar_bd.bat`, o `alembic upgrade head`.
+5. Commitear el modelo y la migración juntos.
+
+El autogenerate está limitado al schema `offix`: nunca propone cambios sobre
+`public`. `alembic upgrade head --sql` exporta el SQL sin conectarse, útil para
+que la PM lo revise antes de aplicarlo. `alembic check` confirma que los modelos
+y la base coinciden.
+
+---
+
 ## Endpoints
 
 ### HU-01
@@ -439,7 +487,7 @@ cargado. Se documentan en un anexo propio una vez confirmado el formato de los
 
 | Método y ruta | Descripción | Auth |
 |---|---|---|
-| `POST /api/v1/oferentes/me/matriculas/validaciones` | Solicita la validación; body `{tipo_profesional, numero_matricula}`. Síncrono, con timeout de 60 s. Devuelve el código de resultado | Oferente |
+| `POST /api/v1/oferentes/me/matriculas/validaciones` | Solicita la validación; body `{tipo_profesional, numero_matricula}`. Síncrono. Devuelve el código de resultado (`Timeout` solo con la matrícula trampa) | Oferente |
 | `GET /api/v1/oferentes/me/matriculas` | Matrículas del Profesional y su estado | Oferente |
 | `GET /api/v1/oferentes/me/matriculas/validaciones` | Historial de intentos | Oferente |
 | `PATCH /api/v1/admin/matriculas/reemplazos/{id}` | El Administrador autoriza o deniega un reemplazo de matrícula | Admin |
@@ -489,8 +537,13 @@ WHATSAPP_PREFIJO_PAIS=549
 # Vencimiento del enlace de reseña.
 SOLICITUD_RESENA_DIAS_VALIDEZ=7
 
-# Tiempo máximo de espera de la validación de matrícula (CA03 de HU-02).
-MATRICULA_TIMEOUT_SEGUNDOS=60
+# Matrícula trampa del CA03 de HU-02. Poner en false en producción.
+MATRICULA_TRAP_HABILITADA=true
+
+# Base de datos: SQLite local para pruebas, o la URI de Supabase para la nube.
+DATABASE_URL=sqlite:///./offix_dev.db
+# Schema de Postgres donde viven las tablas del backend (no aplica a SQLite).
+DATABASE_SCHEMA=offix
 ```
 
 ---
@@ -646,8 +699,9 @@ profesor.**
 
 - Carga de los padrones desde los `.md`, tablas `MATRICULA` y
   `VALIDACION_MATRICULA`.
-- Endpoint de validación síncrono con timeout de 60 s y los siete resultados
-  (los cinco de QA más `Vencida` y `Nombre_No_Coincide`).
+- Endpoint de validación síncrono con los siete resultados (los cinco de QA más
+  `Vencida` y `Nombre_No_Coincide`). `Timeout` se obtiene con la matrícula
+  trampa, al instante.
 - Autorización de reemplazo por el Administrador, con su notificación.
 - Regeneración de `docs/openapi.json` y `docs/openapi.md`.
 
@@ -683,11 +737,15 @@ profesor.**
    carga desde `app/db/seed.py` sin tocar nada más. **Cuando aparezca, hay que
    confirmar que sus matrículas sean de 9 dígitos**: si también son de 10, el
    CA01 está mal escrito.
-2. ~~Faltan cuatro textos de notificación~~ **Resuelto.** Los cuatro textos
-   (matrícula vencida, nombre no coincide, reemplazo pendiente, reemplazo
-   resuelto) quedaron definidos en `app/services/matriculas.py`
-   (`MENSAJES_RESULTADO` y los mensajes de `resolver_reemplazo`), sin reusar
-   el de CA04.
+2. **Textos de notificación sin CA — resuelto en parte.** Se decidió usar solo
+   textos de los criterios de aceptación: matrícula **vencida** y **nombre que no
+   coincide** muestran el del CA04. Siguen abiertos los dos que **ningún CA puede
+   cubrir**, porque ninguno describe un pedido esperando al Administrador:
+   - reemplazo **pendiente** de autorización;
+   - reemplazo **resuelto** (autorizado o denegado).
+
+   Hoy tienen un texto provisorio en `app/services/matriculas.py`
+   (`MENSAJES_RESULTADO` y `resolver_reemplazo`). Hay que pedírselos a QA/PM.
 3. **Contador de la campana.** Los casos de prueba dicen que el badge muestra "las
    notificaciones pendientes de rechazo/aceptación". Pero las informativas de
    matrícula también quedan guardadas hasta visualizarse. ¿El número las cuenta a
@@ -706,5 +764,5 @@ documentos antes de que QA empiece a ejecutar, o van a marcar fallas que no lo s
 | Mockup y caso de prueba de HU-01 CA1 | El modal tiene solo Teléfono y Correo | Sumar el input **Nombre**, obligatorio |
 | Caso de prueba de HU-01 CA1 | El correo debe terminar en `.com` | Validación estándar de email; se aceptan `.com.ar`, `.edu.ar`, etc. |
 | Casos de prueba de HU-01 CA4 | La reseña pasa a estado "Aceptada" | Correcto, pero hay que actualizar el **DER**, que dice `Aprobada` |
-| CA03 de HU-02 y su caso de prueba | Timeout a los **5 minutos**, "simular/forzar" la demora | **60 segundos**, usando la matrícula trampa `9999999999` |
+| CA03 de HU-02 y su caso de prueba | Timeout a los **5 minutos**, "simular/forzar" la demora | Sin demora: usar la matrícula trampa `9999999999` (Gasista) o `999999999` (Aire acondicionado), que responde `Timeout` al instante |
 | RF10 | Menciona el código QR y dice que el enlace lo genera solo el Oferente | Sin QR; el enlace lo genera cualquiera desde el perfil público. El aviso al Profesional ya no es por correo |

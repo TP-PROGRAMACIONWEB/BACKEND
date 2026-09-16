@@ -144,6 +144,11 @@ def resolver_reemplazo_matricula(id_validacion: int, payload: ReemplazoResolucio
     validacion = db.get(ValidacionMatricula, id_validacion)
     if not validacion or validacion.resultado != ResultadoValidacion.REEMPLAZO_SOLICITADO:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No hay un pedido de reemplazo con ese id")
+    if validacion.estado_reemplazo == EstadoReemplazo.SUPERSEDED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El Oferente pidió un reemplazo más nuevo para este oficio: resolvé ese pedido",
+        )
     if validacion.estado_reemplazo != EstadoReemplazo.PENDIENTE:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El reemplazo ya fue resuelto")
 

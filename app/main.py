@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.db.database import Base, engine
+from app.db.database import preparar_esquema
 from app.models import (  # noqa: F401
     alerta_admin,
     archivo_adjunto,
@@ -76,7 +76,7 @@ app.include_router(admin.router)
 
 @app.on_event("startup")
 def on_startup():
-    Base.metadata.create_all(bind=engine)
+    preparar_esquema()
 
 
 @app.get("/health", tags=["Salud"], summary="Chequeo de salud del servicio")

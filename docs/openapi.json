@@ -972,7 +972,7 @@
           "Matrículas"
         ],
         "summary": "Validar (fidelizar) una matrícula profesional contra el padrón",
-        "description": "HU-02 — El Profesional logueado carga tipo y número; la validación es\n**síncrona**, contra el padrón cargado en la base (con timeout de\n`settings.matricula_timeout_segundos`, simulado con la matrícula trampa).\nDevuelve un código de `resultado` con su mensaje; el frontend lo renderiza.",
+        "description": "HU-02 — El Profesional logueado carga tipo y número; la validación es\n**síncrona**, contra el padrón cargado en la base. Devuelve un código de\n`resultado` con su mensaje; el frontend lo renderiza.\n\n**Para QA (CA03):** el resultado `Timeout` se obtiene con la matrícula\ntrampa —`9999999999` para Gasista, `999999999` para Aire acondicionado—,\nque responde al instante, sin esperar ninguna demora real.",
         "operationId": "crear_validacion_api_v1_oferentes_me_matriculas_validaciones_post",
         "requestBody": {
           "content": {

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.matricula import EstadoReemplazo, Matricula, PadronMatricula, ResultadoValidacion, ValidacionMatricula
-from app.models.notificacion import Notificacion, TipoNotificacion
+from app.models.notificacion import EstadoNotificacion, Notificacion, TipoNotificacion
 from app.models.oferente import Oferente
 from app.models.usuario import RolUsuario, Usuario
 
@@ -33,18 +33,26 @@ MATRICULAS_TRAMPA = {
 
 UMBRAL_COINCIDENCIA_NOMBRE = 0.90
 
+# Textos literales de los criterios de aceptación de HU-02: QA los verifica tal
+# cual, así que no se reescriben.
+MENSAJE_CA05_VALIDADA = "Su matrícula fue fidelizada exitosamente"
+MENSAJE_CA04_NO_ENCONTRADA = "Su matrícula no fue encontrada en el padrón, revise los datos y vuelva a intentarlo"
+MENSAJE_CA03_TIMEOUT = "No pudimos procesar tu validación en este momento, intentá nuevamente más tarde"
+MENSAJE_CA06_YA_FIDELIZADA = "Su matrícula ya fue fidelizada"
+
 MENSAJES_RESULTADO = {
-    ResultadoValidacion.VALIDADA: "Su matrícula fue fidelizada exitosamente",
-    ResultadoValidacion.NO_ENCONTRADA: "Su matrícula no fue encontrada en el padrón, revise los datos y vuelva a intentarlo",
-    ResultadoValidacion.TIMEOUT: "No pudimos procesar tu validación en este momento, intentá nuevamente más tarde",
-    ResultadoValidacion.YA_FIDELIZADA: "Su matrícula ya fue fidelizada",
-    ResultadoValidacion.VENCIDA: (
-        "Su matrícula está vencida, contactá al colegio profesional correspondiente para renovarla"
-    ),
-    ResultadoValidacion.NOMBRE_NO_COINCIDE: (
-        "El nombre de tu perfil no coincide con el titular de la matrícula ingresada, "
-        "revisá los datos y volvé a intentarlo"
-    ),
+    ResultadoValidacion.VALIDADA: MENSAJE_CA05_VALIDADA,
+    ResultadoValidacion.NO_ENCONTRADA: MENSAJE_CA04_NO_ENCONTRADA,
+    ResultadoValidacion.TIMEOUT: MENSAJE_CA03_TIMEOUT,
+    ResultadoValidacion.YA_FIDELIZADA: MENSAJE_CA06_YA_FIDELIZADA,
+    # Ningún CA define estos dos casos. Por decisión del equipo se muestra el
+    # texto del CA04 en vez de inventar uno: para el Profesional, en los dos la
+    # matrícula no es válida y tiene que revisar los datos. El `resultado`
+    # sigue distinguiéndolos, así el historial conserva el motivo real.
+    ResultadoValidacion.VENCIDA: MENSAJE_CA04_NO_ENCONTRADA,
+    ResultadoValidacion.NOMBRE_NO_COINCIDE: MENSAJE_CA04_NO_ENCONTRADA,
+    # Sin equivalente en los CA: ninguno de sus textos describe un pedido que
+    # queda esperando al Administrador. Pendiente de que QA/PM lo defina.
     ResultadoValidacion.REEMPLAZO_SOLICITADO: (
         "Tu solicitud de reemplazo de matrícula fue enviada al Administrador y está pendiente de autorización. "
         "Mientras tanto, tu matrícula anterior sigue vigente."
@@ -117,8 +125,29 @@ def _supersedear_reemplazos_previos(db: Session, oferente_id: int, tipo_profesio
         )
         .all()
     )
+    if not pendientes:
+        return
+
     for pendiente in pendientes:
         pendiente.estado_reemplazo = EstadoReemplazo.SUPERSEDED
+
+    # El pedido viejo ya no se puede resolver, así que sus notificaciones al
+    # Administrador no pueden quedar esperando una decisión: si no, el contador
+    # de su campana no baja nunca. Se cierran como Leida porque el Administrador
+    # no aceptó ni rechazó nada; el pedido nuevo trae su propia notificación.
+    ahora = datetime.now(timezone.utc)
+    notificaciones = (
+        db.query(Notificacion)
+        .filter(
+            Notificacion.validacion_matricula_id.in_([p.id_validacion for p in pendientes]),
+            Notificacion.requiere_accion.is_(True),
+            Notificacion.estado == EstadoNotificacion.PENDIENTE,
+        )
+        .all()
+    )
+    for notificacion in notificaciones:
+        notificacion.estado = EstadoNotificacion.LEIDA
+        notificacion.fecha_resolucion = ahora
 
 
 def validar_matricula(db: Session, oferente: Oferente, tipo_profesional: str, numero_matricula: str) -> ValidacionMatricula:
