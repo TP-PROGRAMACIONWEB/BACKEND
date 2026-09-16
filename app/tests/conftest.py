@@ -12,11 +12,13 @@ from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
+from app.core.config import settings  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.db.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.categoria import Categoria  # noqa: E402
 from app.models.usuario import RolUsuario, Usuario  # noqa: E402
+from app.services.auth0 import Auth0ServiceFake, get_auth0_service  # noqa: E402
 from app.services.email import EmailServiceFake, get_email_service  # noqa: E402
 
 TEST_DATABASE_URL = "sqlite://"
@@ -47,12 +49,25 @@ def emails() -> EmailServiceFake:
 
 
 @pytest.fixture()
-def client(db_session, emails):
+def auth0() -> Auth0ServiceFake:
+    """Doble del login con Google: la suite nunca llama a Auth0 de verdad."""
+    return Auth0ServiceFake()
+
+
+@pytest.fixture()
+def client(db_session, emails, auth0, monkeypatch):
     def override_get_db():
         yield db_session
 
+    # El login con Google se prueba con settings.auth0_habilitado en True: los
+    # tests que verifican el 503 lo desactivan explícitamente con monkeypatch.
+    monkeypatch.setattr(settings, "auth0_domain", "offix-test.us.auth0.com")
+    monkeypatch.setattr(settings, "auth0_client_id", "client-id-test")
+    monkeypatch.setattr(settings, "auth0_client_secret", "client-secret-test")
+
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_email_service] = lambda: emails
+    app.dependency_overrides[get_auth0_service] = lambda: auth0
     # El evento de startup real de la app corre create_all contra el engine de
     # producción (Postgres/SQLite del .env) — en tests las tablas ya se crean
     # contra el engine de test en la fixture db_session, así que se desactiva

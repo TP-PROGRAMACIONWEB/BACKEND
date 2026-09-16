@@ -23,6 +23,11 @@ class Usuario(Base):
     id_usuario = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
+    # Nombre que muestra el perfil (HU-03/CA02). NULL para las cuentas que
+    # todavía no iniciaron sesión con Google: el login por email/password no
+    # lo pide. Se actualiza en cada login con Google, que es la fuente de
+    # verdad de este dato para esas cuentas.
+    nombre = Column(String(150), nullable=True)
     rol = Column(
         Enum(
             RolUsuario,

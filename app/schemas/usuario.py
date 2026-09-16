@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.models.usuario import RolUsuario
 
@@ -29,6 +29,18 @@ class UsuarioOut(UsuarioBase):
     rol: RolUsuario
     estado_cuenta: str
     fecha_registro: datetime
+
+
+class PerfilOut(BaseModel):
+    """HU-03 / CA02: lo único que se ve al volver del login. Nada de datos del
+    perfil de Oferente — esa es otra HU."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id_usuario: int
+    email: EmailStr
+    nombre: str | None = Field(default=None, description="Viene de Google. Vacío para cuentas que solo usaron email/password.")
+    rol: RolUsuario
 
 
 class Token(BaseModel):
