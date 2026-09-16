@@ -2,7 +2,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+psycopg2://user:password@localhost:5432/offix"
+    # Sin .env se usa la base SQLite local de pruebas. Para la nube, ver
+    # `.env.example` y `app/db/database.py`.
+    database_url: str = "sqlite:///./offix_dev.db"
     secret_key: str = "change-me"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
