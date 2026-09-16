@@ -13,13 +13,17 @@ from app.models import (  # noqa: F401
     solicitud_resena,
     usuario,
 )
-from app.routers import admin, auth, categorias, oferentes, resenas
+from app.routers import admin, auth, categorias, notificaciones, oferentes, resenas
 
 tags_metadata = [
     {"name": "Autenticación", "description": "Registro, inicio y cierre de sesión de Oferentes (RF1, RF4, HU-03)."},
     {"name": "Oferentes", "description": "Perfiles profesionales: alta, edición, búsqueda y consulta pública (RF2, RF7, RF8, HU-02)."},
     {"name": "Categorías", "description": "Rubros/oficios disponibles en la plataforma (RF18)."},
     {"name": "Reseñas", "description": "Flujo de calificaciones y reseñas vía link/QR único (RF10-RF13, HU-01)."},
+    {
+        "name": "Notificaciones",
+        "description": "Bandeja in-app (la campana): reseñas esperando decisión y avisos al usuario (HU-01, HU-02).",
+    },
     {"name": "Administración", "description": "Gestión de usuarios, verificación de matrícula, alertas y moderación (RF14-RF18)."},
 ]
 
@@ -60,6 +64,7 @@ app.include_router(auth.router)
 app.include_router(oferentes.router)
 app.include_router(categorias.router)
 app.include_router(resenas.router)
+app.include_router(notificaciones.router)
 app.include_router(admin.router)
 
 

@@ -14,11 +14,12 @@ from app.core.security import hash_password
 from app.db.database import Base, SessionLocal, engine
 from app.models import alerta_admin, archivo_adjunto  # noqa: F401 — registran sus mappers
 from app.models.categoria import Categoria
-from app.models.notificacion import EstadoNotificacion, Notificacion, TipoNotificacion
+from app.models.notificacion import Notificacion
 from app.models.oferente import EstadoVerificacion, Oferente
 from app.models.resena import EstadoResena, Resena
 from app.models.solicitud_resena import EstadoSolicitud, OrigenSolicitud, SolicitudResena
 from app.models.usuario import RolUsuario, Usuario
+from app.services.notificaciones import crear_notificacion_resena_nueva
 
 PASSWORD_SEED = "Offix2026!"
 
@@ -200,29 +201,16 @@ def get_or_create_resena_aceptada(db, oferente: Oferente) -> Resena:
     return resena
 
 
-def get_or_create_notificacion_pendiente(db, oferente: Oferente, resena: Resena) -> Notificacion:
+def get_or_create_notificacion_pendiente(db, resena: Resena, solicitud: SolicitudResena) -> Notificacion:
     """Una notificación en la campana del Oferente, para poder mostrar el
-    contador sin tener que generar una reseña primero. Muestra el contacto del
-    cliente y la fecha, nunca el contenido de la reseña."""
+    contador sin tener que generar una reseña primero. La arma el mismo servicio
+    que usa el endpoint, así que el texto de la demo es el real."""
     existente = db.query(Notificacion).filter(Notificacion.resena_id == resena.id_resena).first()
     if existente:
         return existente
-
-    notificacion = Notificacion(
-        usuario_id=oferente.id_oferente,
-        tipo=TipoNotificacion.RESENA_NUEVA,
-        mensaje=(
-            f"{resena.nombre_cliente} ({resena.contacto_cliente_ingresado}) dejó una reseña sobre tu trabajo. "
-            "Revisá los datos de contacto y decidí si la aceptás."
-        ),
-        requiere_accion=True,
-        estado=EstadoNotificacion.PENDIENTE,
-        resena_id=resena.id_resena,
-        fecha_creacion=resena.fecha_creacion or datetime.now(timezone.utc),
-    )
-    db.add(notificacion)
-    db.flush()
-    return notificacion
+    if resena.fecha_creacion is None:
+        db.refresh(resena)  # la fecha la pone la base al insertar
+    return crear_notificacion_resena_nueva(db, resena, solicitud)
 
 
 def run():
@@ -280,7 +268,7 @@ def run():
             solicitud_pendiente.estado = EstadoSolicitud.UTILIZADA
             db.add(resena_pendiente)
             db.flush()
-        get_or_create_notificacion_pendiente(db, oferentes[1], resena_pendiente)
+        get_or_create_notificacion_pendiente(db, resena_pendiente, solicitud_pendiente)
 
         db.commit()
         print(f"Datos de prueba cargados/verificados correctamente ({len(categorias)} categorías, {len(oferentes)} oferentes).")

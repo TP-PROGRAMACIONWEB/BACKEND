@@ -16,12 +16,15 @@ from app.schemas.resena import (
     ResenaCreate,
     ResenaModeracion,
     ResenaOut,
+    ResenaPrivadaOut,
     SolicitudResenaCreate,
     SolicitudResenaOut,
     SolicitudResenaVistaOut,
 )
 from app.services.email import EmailError, EmailService, get_email_service, url_resena
 from app.services.mensajes import armar_whatsapp_url
+from app.services.notificaciones import crear_notificacion_resena_nueva, resolver_notificacion_de_resena
+from app.services.resenas import recalcular_promedio
 
 router = APIRouter(prefix="/api/v1", tags=["Reseñas"])
 
@@ -50,6 +53,21 @@ def _esta_vencida(solicitud: SolicitudResena) -> bool:
 
 def _nombre_completo(oferente: Oferente) -> str:
     return f"{oferente.nombre} {oferente.apellido}"
+
+
+def _salida_privada(resena: Resena, solicitud: SolicitudResena) -> ResenaPrivadaOut:
+    """Salida para el Profesional dueño: incluye el contacto del cliente."""
+    return ResenaPrivadaOut(
+        id_resena=resena.id_resena,
+        oferente_id=resena.oferente_id,
+        solicitud_id=resena.solicitud_id,
+        nombre_cliente=resena.nombre_cliente,
+        calificaciones_comentarios=resena.calificaciones_comentarios,
+        estado=resena.estado,
+        fecha_creacion=resena.fecha_creacion,
+        telefono_cliente=solicitud.telefono_cliente,
+        email_cliente=solicitud.email_cliente,
+    )
 
 
 @router.post(
@@ -189,8 +207,8 @@ def registrar_resena(payload: ResenaCreate, db: Session = Depends(get_db)):
     """RF10 — El cliente deja la reseña accediendo con el `codigo_unico` del
     enlace, sin loguearse. Los datos del cliente **no viajan en el body**: se
     copian de la solicitud, que es donde quedaron registrados al generar el
-    enlace. Queda en `Pendiente_Aceptacion` hasta que el Profesional la resuelva
-    desde su bandeja de notificaciones."""
+    enlace. Queda en `Pendiente_Aceptacion` y, en la misma transacción, se crea
+    la notificación en la bandeja del Profesional, que es donde la resuelve."""
     solicitud = db.query(SolicitudResena).filter(SolicitudResena.codigo_unico == payload.codigo_unico).first()
     if not solicitud or solicitud.estado != EstadoSolicitud.PENDIENTE_USO:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Enlace de reseña inválido o ya utilizado")
@@ -210,6 +228,13 @@ def registrar_resena(payload: ResenaCreate, db: Session = Depends(get_db)):
     )
     solicitud.estado = EstadoSolicitud.UTILIZADA
     db.add(resena)
+    db.flush()
+    # El refresh trae el id_resena y la fecha_creacion que pone la base: la
+    # notificación tiene que mostrar esa fecha, la de la carga del cliente.
+    db.refresh(resena)
+
+    crear_notificacion_resena_nueva(db, resena, solicitud)
+
     db.commit()
     db.refresh(resena)
     return resena
@@ -233,8 +258,8 @@ def listar_resenas_publicas(oferente_id: int, db: Session = Depends(get_db)):
 
 @router.patch(
     "/resenas/{resena_id}/moderar",
-    response_model=ResenaOut,
-    summary="Aceptar o rechazar una reseña pendiente",
+    response_model=ResenaPrivadaOut,
+    summary="Aceptar o rechazar una reseña pendiente desde la bandeja",
     responses={
         400: {"description": "La reseña ya fue moderada (no está Pendiente_Aceptacion)"},
         401: {"description": "Falta token o es inválido"},
@@ -248,9 +273,16 @@ def moderar_resena(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ):
-    """RF11/RF13 — El Profesional acepta o rechaza la reseña. Si se rechazan 5 o
-    más de las últimas 10 reseñas del oferente, se genera automáticamente una
-    `AlertaAdministrador` (RF11) visible en `GET /admin/alertas`."""
+    """RF11/RF13 — El Profesional resuelve desde la campana la reseña que le
+    llegó. Al **aceptar**, la reseña se publica en el perfil y se recalcula el
+    promedio; al **rechazar**, no se publica ni suma al promedio. En las dos
+    ramas se cierra la notificación asociada **en la misma transacción**.
+
+    Si se rechazan 5 o más de las últimas 10 reseñas del oferente, se genera
+    automáticamente una `AlertaAdministrador` (RF11) visible en
+    `GET /admin/alertas`.
+
+    La respuesta incluye el contacto del cliente: la ve solo el dueño."""
     resena = db.get(Resena, resena_id)
     if not resena:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reseña no encontrada")
@@ -263,6 +295,8 @@ def moderar_resena(
 
     if payload.aceptar:
         resena.estado = EstadoResena.ACEPTADA
+        db.flush()
+        recalcular_promedio(db, oferente)
     else:
         resena.estado = EstadoResena.RECHAZADA
         db.flush()  # autoflush está desactivado; sin esto, la consulta de abajo no vería este rechazo
@@ -284,6 +318,8 @@ def moderar_resena(
             )
             db.add(alerta)
 
+    resolver_notificacion_de_resena(db, resena, aceptada=payload.aceptar)
+
     db.commit()
     db.refresh(resena)
-    return resena
+    return _salida_privada(resena, db.get(SolicitudResena, resena.solicitud_id))

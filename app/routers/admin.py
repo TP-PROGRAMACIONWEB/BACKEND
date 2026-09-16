@@ -12,6 +12,7 @@ from app.models.usuario import EstadoCuenta, Usuario
 from app.schemas.oferente import OferenteOut
 from app.schemas.resena import ResenaAdminOut
 from app.schemas.usuario import UsuarioOut
+from app.services.resenas import recalcular_promedio
 
 RESPUESTAS_ADMIN_COMUNES = {
     401: {"description": "Falta token o es inválido"},
@@ -112,6 +113,10 @@ def publicar_resena_rechazada(resena_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reseña no encontrada")
 
     resena.estado = EstadoResena.ACEPTADA
+    db.flush()
+    # Publicarla la hace visible en el perfil, así que también tiene que entrar
+    # al promedio: el recálculo es el mismo que usa la moderación del Oferente.
+    recalcular_promedio(db, db.get(Oferente, resena.oferente_id))
     db.commit()
     db.refresh(resena)
     return resena

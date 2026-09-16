@@ -183,5 +183,14 @@ class ResenaOut(BaseModel):
     fecha_creacion: datetime
 
 
+class ResenaPrivadaOut(ResenaOut):
+    """Lo que ve el Profesional dueño de la reseña. A diferencia de la salida
+    pública, expone el contacto del cliente: es una decisión explícita del
+    equipo, para que pueda verificar la identidad y comunicarse."""
+
+    telefono_cliente: str | None = None
+    email_cliente: str | None = None
+
+
 class ResenaAdminOut(ResenaOut):
     contacto_cliente_ingresado: str
