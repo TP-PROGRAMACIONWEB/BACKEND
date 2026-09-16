@@ -5,12 +5,11 @@ from app.db.database import Base
 
 
 class EstadoResena:
-    # Solo las reseñas originadas por WhatsApp arrancan sin verificar: el cliente
-    # cargó su mail en la propia vista y todavía no confirmó que sea suyo. Una
-    # reseña en este estado es invisible en todas las vistas y no suma al promedio.
-    PENDIENTE_VERIFICACION = "Pendiente_Verificacion"
-    PENDIENTE_APROBACION = "Pendiente_Aprobacion"
-    APROBADA = "Aprobada"
+    """Vocabulario alineado con la UI y con los casos de prueba de QA: los
+    botones de la bandeja dicen Aceptar / Rechazar, no Aprobar."""
+
+    PENDIENTE_ACEPTACION = "Pendiente_Aceptacion"
+    ACEPTADA = "Aceptada"
     RECHAZADA = "Rechazada"
 
 
@@ -21,11 +20,14 @@ class Resena(Base):
     oferente_id = Column(Integer, ForeignKey("oferentes.id_oferente", ondelete="CASCADE"), nullable=False, index=True)
     solicitud_id = Column(Integer, ForeignKey("solicitudes_resena.id_solicitud", ondelete="CASCADE"), nullable=False)
 
+    # Copiados de la solicitud al crear la reseña: el cliente ya no los tipea en
+    # este paso, los ve precargados y bloqueados.
     nombre_cliente = Column(String(100), nullable=False)
     contacto_cliente_ingresado = Column(String(100), nullable=False)
     calificaciones_comentarios = Column(JSON, nullable=False)
-    estado = Column(String(50), nullable=False, default=EstadoResena.PENDIENTE_APROBACION)
+    estado = Column(String(50), nullable=False, default=EstadoResena.PENDIENTE_ACEPTACION)
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
 
     oferente = relationship("Oferente", back_populates="resenas")
     solicitud = relationship("SolicitudResena", back_populates="resenas")
+    notificaciones = relationship("Notificacion", back_populates="resena", cascade="all, delete-orphan")

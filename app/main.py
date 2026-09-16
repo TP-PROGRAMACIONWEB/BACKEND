@@ -3,7 +3,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.db.database import Base, engine
-from app.models import alerta_admin, archivo_adjunto, categoria, oferente, resena, solicitud_resena, usuario  # noqa: F401
+from app.models import (  # noqa: F401
+    alerta_admin,
+    archivo_adjunto,
+    categoria,
+    notificacion,
+    oferente,
+    resena,
+    solicitud_resena,
+    usuario,
+)
 from app.routers import admin, auth, categorias, oferentes, resenas
 
 tags_metadata = [
@@ -27,8 +36,9 @@ app = FastAPI(
         "El spec completo también está disponible en `/openapi.json` y como archivo estático en "
         "`docs/openapi.json` del repo — se puede importar directo en Hoppscotch como colección.\n\n"
         "### Estado del proyecto\n"
-        "Sprint 1 — flujo de reseña (HU-01) con validación de enlace simulada, sin envío real de "
-        "mail/WhatsApp. Ver `docs/plan-sprint-1.md` para el detalle de alcance y decisiones."
+        "Sprint 1 — flujo de reseña (HU-01): el enlace se genera desde el perfil público y se envía por "
+        "WhatsApp (link `wa.me` con el mensaje precargado) y/o por correo. Ver `docs/plan-sprint-1.md` "
+        "para el detalle de alcance y decisiones."
     ),
     version="0.1.0",
     openapi_tags=tags_metadata,

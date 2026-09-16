@@ -1,14 +1,20 @@
 """Carga datos de prueba para poder demostrar el flujo de Sprint 1: categorías
-de oficios, Oferentes de ejemplo (con su Usuario asociado) y una solicitud de
-reseña ya generada. Idempotente: se puede correr varias veces sin duplicar datos.
+de oficios, Oferentes de ejemplo (con su Usuario asociado), solicitudes de reseña
+ya generadas —una por canal— y una notificación pendiente en la bandeja, para
+poder mostrar la campana con contador sin generar una reseña primero.
+Idempotente: se puede correr varias veces sin duplicar datos.
 
 Uso: python -m app.db.seed
 """
 
+from datetime import datetime, timedelta, timezone
+
+from app.core.config import settings
 from app.core.security import hash_password
 from app.db.database import Base, SessionLocal, engine
 from app.models import alerta_admin, archivo_adjunto  # noqa: F401 — registran sus mappers
 from app.models.categoria import Categoria
+from app.models.notificacion import EstadoNotificacion, Notificacion, TipoNotificacion
 from app.models.oferente import EstadoVerificacion, Oferente
 from app.models.resena import EstadoResena, Resena
 from app.models.solicitud_resena import EstadoSolicitud, OrigenSolicitud, SolicitudResena
@@ -84,7 +90,11 @@ OFERENTES_DEMO = [
 
 CODIGO_SOLICITUD_EMAIL = "DEMO-EMAIL-0001"
 CODIGO_SOLICITUD_WHATSAPP = "DEMO-WPP-0001"
-CODIGO_SOLICITUD_APROBADA = "DEMO-APROBADA-0001"
+CODIGO_SOLICITUD_ACEPTADA = "DEMO-ACEPTADA-0001"
+
+
+def fecha_expiracion() -> datetime:
+    return datetime.now(timezone.utc) + timedelta(days=settings.solicitud_resena_dias_validez)
 
 
 def get_or_create_categoria(db, nombre: str, descripcion: str) -> Categoria:
@@ -140,14 +150,16 @@ def get_or_create_admin(db) -> Usuario:
     return admin
 
 
-def get_or_create_solicitud(db, oferente: Oferente, codigo: str, origen: str, **datos_cliente) -> SolicitudResena:
+def get_or_create_solicitud(db, oferente: Oferente, codigo: str, **datos_cliente) -> SolicitudResena:
+    """El canal (`origen`) sale de qué datos de contacto se cargaron."""
     solicitud = db.query(SolicitudResena).filter(SolicitudResena.codigo_unico == codigo).first()
     if solicitud:
         return solicitud
     solicitud = SolicitudResena(
         oferente_id=oferente.id_oferente,
         codigo_unico=codigo,
-        origen=origen,
+        origen=OrigenSolicitud.desde_contacto(datos_cliente.get("telefono_cliente"), datos_cliente.get("email_cliente")),
+        fecha_expiracion=fecha_expiracion(),
         **datos_cliente,
     )
     db.add(solicitud)
@@ -155,13 +167,12 @@ def get_or_create_solicitud(db, oferente: Oferente, codigo: str, origen: str, **
     return solicitud
 
 
-def get_or_create_resena_aprobada(db, oferente: Oferente) -> Resena:
+def get_or_create_resena_aceptada(db, oferente: Oferente) -> Resena:
     """Deja una reseña ya publicada para que el perfil muestre un promedio real en la demo."""
     solicitud = get_or_create_solicitud(
         db,
         oferente,
-        CODIGO_SOLICITUD_APROBADA,
-        OrigenSolicitud.CLIENTE_EMAIL,
+        CODIGO_SOLICITUD_ACEPTADA,
         nombre_cliente="Marta Ibáñez",
         email_cliente="marta.ibanez@offix.example.com",
     )
@@ -180,13 +191,38 @@ def get_or_create_resena_aprobada(db, oferente: Oferente) -> Resena:
             "criterios": criterios,
             "comentario": "Muy prolijo y puntual. Lo recomiendo.",
         },
-        estado=EstadoResena.APROBADA,
+        estado=EstadoResena.ACEPTADA,
     )
     solicitud.estado = EstadoSolicitud.UTILIZADA
     oferente.promedio_calificacion = resena.calificaciones_comentarios["puntuacion_global"]
     db.add(resena)
     db.flush()
     return resena
+
+
+def get_or_create_notificacion_pendiente(db, oferente: Oferente, resena: Resena) -> Notificacion:
+    """Una notificación en la campana del Oferente, para poder mostrar el
+    contador sin tener que generar una reseña primero. Muestra el contacto del
+    cliente y la fecha, nunca el contenido de la reseña."""
+    existente = db.query(Notificacion).filter(Notificacion.resena_id == resena.id_resena).first()
+    if existente:
+        return existente
+
+    notificacion = Notificacion(
+        usuario_id=oferente.id_oferente,
+        tipo=TipoNotificacion.RESENA_NUEVA,
+        mensaje=(
+            f"{resena.nombre_cliente} ({resena.contacto_cliente_ingresado}) dejó una reseña sobre tu trabajo. "
+            "Revisá los datos de contacto y decidí si la aceptás."
+        ),
+        requiere_accion=True,
+        estado=EstadoNotificacion.PENDIENTE,
+        resena_id=resena.id_resena,
+        fecha_creacion=resena.fecha_creacion or datetime.now(timezone.utc),
+    )
+    db.add(notificacion)
+    db.flush()
+    return notificacion
 
 
 def run():
@@ -199,27 +235,62 @@ def run():
 
         get_or_create_admin(db)
 
-        # Un enlace de cada origen, para poder probar los dos modos de la vista
-        # de reseña sin depender del correo.
+        # Un enlace por canal, para probar la vista de reseña sin depender del
+        # correo ni de WhatsApp.
         get_or_create_solicitud(
             db,
             oferentes[0],
             CODIGO_SOLICITUD_EMAIL,
-            OrigenSolicitud.CLIENTE_EMAIL,
             nombre_cliente="Cliente Demo",
             email_cliente="cliente.demo@offix.example.com",
         )
-        get_or_create_solicitud(db, oferentes[0], CODIGO_SOLICITUD_WHATSAPP, OrigenSolicitud.OFERENTE_WHATSAPP)
-        get_or_create_resena_aprobada(db, oferentes[0])
+        get_or_create_solicitud(
+            db,
+            oferentes[0],
+            CODIGO_SOLICITUD_WHATSAPP,
+            nombre_cliente="Cliente WhatsApp",
+            telefono_cliente="3516924551",
+        )
+        resena = get_or_create_resena_aceptada(db, oferentes[0])
+
+        # Una reseña pendiente con su notificación, para la campana de la demo.
+        solicitud_pendiente = get_or_create_solicitud(
+            db,
+            oferentes[1],
+            "DEMO-PENDIENTE-0001",
+            nombre_cliente="Gustavo Rivas",
+            telefono_cliente="3564692755",
+            email_cliente="gustavo.rivas@offix.example.com",
+        )
+        resena_pendiente = db.query(Resena).filter(Resena.solicitud_id == solicitud_pendiente.id_solicitud).first()
+        if not resena_pendiente:
+            criterios = {"precio": 4.5, "calidad": 4.0, "atencion": 5.0, "puntualidad": 4.0}
+            resena_pendiente = Resena(
+                oferente_id=oferentes[1].id_oferente,
+                solicitud_id=solicitud_pendiente.id_solicitud,
+                nombre_cliente=solicitud_pendiente.nombre_cliente,
+                contacto_cliente_ingresado=solicitud_pendiente.email_cliente,
+                calificaciones_comentarios={
+                    "puntuacion_global": round(sum(criterios.values()) / len(criterios), 2),
+                    "criterios": criterios,
+                    "comentario": "Resolvió una pérdida el mismo día.",
+                },
+                estado=EstadoResena.PENDIENTE_ACEPTACION,
+            )
+            solicitud_pendiente.estado = EstadoSolicitud.UTILIZADA
+            db.add(resena_pendiente)
+            db.flush()
+        get_or_create_notificacion_pendiente(db, oferentes[1], resena_pendiente)
 
         db.commit()
         print(f"Datos de prueba cargados/verificados correctamente ({len(categorias)} categorías, {len(oferentes)} oferentes).")
         print(f"Usuario admin: admin@offix.example.com / password: {PASSWORD_SEED}")
         print(f"Oferentes de ejemplo: password para todos: {PASSWORD_SEED}")
         print("Enlaces de reseña de demo (sin login):")
-        print(f"  - origen Cliente_Email (datos bloqueados):    {CODIGO_SOLICITUD_EMAIL}")
-        print(f"  - origen Oferente_WhatsApp (datos editables): {CODIGO_SOLICITUD_WHATSAPP}")
-        print(f"{oferentes[0].nombre} {oferentes[0].apellido} tiene una reseña aprobada de ejemplo en su perfil.")
+        print(f"  - canal Email:    {CODIGO_SOLICITUD_EMAIL}")
+        print(f"  - canal WhatsApp: {CODIGO_SOLICITUD_WHATSAPP}")
+        print(f"{oferentes[0].nombre} {oferentes[0].apellido} tiene una reseña aceptada de ejemplo en su perfil.")
+        print(f"{oferentes[1].nombre} {oferentes[1].apellido} tiene 1 notificación pendiente en la campana.")
     except Exception:
         db.rollback()
         raise

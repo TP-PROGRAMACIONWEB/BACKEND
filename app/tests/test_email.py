@@ -3,14 +3,7 @@ import pytest
 
 from app.core.config import settings
 from app.services import email as email_module
-from app.services.email import (
-    BrevoEmailService,
-    EmailError,
-    EmailServiceFake,
-    url_moderacion,
-    url_resena,
-    url_verificacion,
-)
+from app.services.email import BrevoEmailService, EmailError, EmailServiceFake, url_resena
 
 
 class RespuestaFalsa:
@@ -26,8 +19,6 @@ def test_urls_usan_la_url_base_configurada(monkeypatch):
     monkeypatch.setattr(settings, "frontend_url", "https://offix.vercel.app/")
 
     assert url_resena("ABC123") == "https://offix.vercel.app/resena/ABC123"
-    assert url_verificacion("tok.en") == "https://offix.vercel.app/resena/verificar/tok.en"
-    assert url_moderacion(42) == "https://offix.vercel.app/mis-resenas/42"
 
 
 def test_url_resena_escapa_caracteres_especiales(monkeypatch):
@@ -55,40 +46,9 @@ def test_link_resena_arma_asunto_destinatario_y_link():
     assert correo.nombre_destinatario == "Juan Cliente"
     assert "María Gómez" in correo.asunto
     assert url_resena("CODIGO-1") in correo.cuerpo_html
-    assert "Juan Cliente" in correo.cuerpo_html
-
-
-def test_verificacion_lleva_el_link_con_token_y_aclara_que_no_se_publico():
-    servicio = EmailServiceFake()
-
-    servicio.enviar_verificacion_resena(
-        email_cliente="cliente@test.com",
-        nombre_cliente="Juan Cliente",
-        nombre_oferente="María Gómez",
-        token="un-token-firmado",
-    )
-
-    correo = servicio.enviados[0]
-    assert "Confirmá" in correo.asunto
-    assert url_verificacion("un-token-firmado") in correo.cuerpo_html
-    assert "no se le envía al profesional" in correo.cuerpo_html
-
-
-def test_aviso_al_oferente_lleva_al_detalle_de_la_resena():
-    servicio = EmailServiceFake()
-
-    servicio.enviar_aviso_resena_nueva(
-        email_oferente="oferente@test.com",
-        nombre_oferente="María",
-        nombre_cliente="Juan Cliente",
-        id_resena=7,
-    )
-
-    correo = servicio.enviados[0]
-    assert correo.destinatario == "oferente@test.com"
-    assert "reseña nueva" in correo.asunto
-    assert url_moderacion(7) in correo.cuerpo_html
-    assert "Juan Cliente" in correo.cuerpo_html
+    # El texto es el que definió QA, el mismo que viaja por WhatsApp.
+    assert "Gracias por confiar en María Gómez a través de Offix." in correo.cuerpo_html
+    assert "¡Gracias por ser parte de Offix!" in correo.cuerpo_html
 
 
 def test_el_fake_acumula_los_envios_y_se_puede_limpiar():

@@ -46,7 +46,6 @@ class Oferente(Base):
     promedio_calificacion = Column(Numeric(3, 2), nullable=False, default=0)
     descripcion = Column(Text, nullable=True)
     cantidad_rechazos_acumulados = Column(Integer, nullable=False, default=0)
-    notificaciones_email_habilitadas = Column(Boolean, nullable=False, default=True)
 
     usuario = relationship("Usuario", back_populates="oferente")
     categoria = relationship("Categoria", back_populates="oferentes")

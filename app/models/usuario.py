@@ -38,3 +38,4 @@ class Usuario(Base):
     fecha_registro = Column(DateTime(timezone=True), server_default=func.now())
 
     oferente = relationship("Oferente", back_populates="usuario", uselist=False)
+    notificaciones = relationship("Notificacion", back_populates="usuario", cascade="all, delete-orphan")

@@ -6,3 +6,6 @@ __pycache__/
 
 # Base de datos local de desarrollo: se regenera con cargar_datos_prueba.bat
 *.db
+
+# Salida de la herramienta graphify (grafo de conocimiento generado)
+graphify-out/

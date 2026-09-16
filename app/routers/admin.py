@@ -111,7 +111,7 @@ def publicar_resena_rechazada(resena_id: int, db: Session = Depends(get_db)):
     if not resena:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reseña no encontrada")
 
-    resena.estado = EstadoResena.APROBADA
+    resena.estado = EstadoResena.ACEPTADA
     db.commit()
     db.refresh(resena)
     return resena

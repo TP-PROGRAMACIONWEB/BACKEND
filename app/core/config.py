@@ -18,6 +18,16 @@ class Settings(BaseSettings):
     brevo_sender_name: str = "Offix"
     brevo_timeout_segundos: float = 10.0
 
+    # Prefijo internacional para armar el link de wa.me (Argentina móvil). El
+    # usuario carga los 10 dígitos de área + línea y el backend antepone esto.
+    whatsapp_prefijo_pais: str = "549"
+
+    # Vencimiento del enlace de reseña, en días desde la generación.
+    solicitud_resena_dias_validez: int = 7
+
+    # Tiempo máximo de espera de la validación de matrícula (CA03 de HU-02).
+    matricula_timeout_segundos: int = 60
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @property
