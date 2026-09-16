@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
 from app.db.database import get_db
+from app.models.matricula import Matricula, ValidacionMatricula
 from app.models.notificacion import EstadoNotificacion, Notificacion
+from app.models.oferente import Oferente
 from app.models.resena import Resena
 from app.models.solicitud_resena import SolicitudResena
 from app.models.usuario import Usuario
@@ -17,13 +19,29 @@ RESPUESTAS_AUTENTICADAS = {401: {"description": "Falta token o es inválido"}}
 
 
 def _armar_salida(db: Session, notificacion: Notificacion) -> NotificacionOut:
-    """Completa la tarjeta con los datos de contacto del cliente, que viven en
-    la solicitud. El contenido de la reseña nunca se toca."""
+    """Completa la tarjeta con los datos de contacto del cliente (reseñas) o
+    con el detalle del reemplazo de matrícula, que viven en tablas aparte.
+    El contenido de la reseña nunca se toca."""
     solicitud = None
     if notificacion.resena_id:
         resena = db.get(Resena, notificacion.resena_id)
         if resena:
             solicitud = db.get(SolicitudResena, resena.solicitud_id)
+
+    oferente_nombre = tipo_profesional = numero_actual = numero_solicitada = None
+    if notificacion.validacion_matricula_id:
+        validacion = db.get(ValidacionMatricula, notificacion.validacion_matricula_id)
+        if validacion:
+            oferente = db.get(Oferente, validacion.oferente_id)
+            oferente_nombre = f"{oferente.nombre} {oferente.apellido}" if oferente else None
+            tipo_profesional = validacion.tipo_profesional
+            numero_solicitada = validacion.numero_matricula
+            matricula_vigente = (
+                db.query(Matricula)
+                .filter(Matricula.oferente_id == validacion.oferente_id, Matricula.tipo_profesional == validacion.tipo_profesional)
+                .first()
+            )
+            numero_actual = matricula_vigente.numero_matricula if matricula_vigente else None
 
     return NotificacionOut(
         id_notificacion=notificacion.id_notificacion,
@@ -35,6 +53,11 @@ def _armar_salida(db: Session, notificacion: Notificacion) -> NotificacionOut:
         nombre_cliente=solicitud.nombre_cliente if solicitud else None,
         telefono_cliente=solicitud.telefono_cliente if solicitud else None,
         email_cliente=solicitud.email_cliente if solicitud else None,
+        validacion_matricula_id=notificacion.validacion_matricula_id,
+        oferente_nombre=oferente_nombre,
+        tipo_profesional=tipo_profesional,
+        numero_matricula_actual=numero_actual,
+        numero_matricula_solicitada=numero_solicitada,
         fecha_creacion=notificacion.fecha_creacion,
         fecha_resolucion=notificacion.fecha_resolucion,
     )

@@ -2,7 +2,7 @@ import re
 from datetime import time
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 DNI_CUIT_RE = re.compile(r"^[0-9-]{6,50}$")
 TELEFONO_RE = re.compile(r"^[0-9+\s]{6,50}$")
@@ -84,3 +84,6 @@ class OferenteOut(OferenteBase):
     estado_verificacion: str
     promedio_calificacion: Decimal
     cantidad_rechazos_acumulados: int
+    tiene_matricula_validada: bool = Field(
+        default=False, description="HU-02: true con al menos una matrícula fidelizada contra el padrón."
+    )

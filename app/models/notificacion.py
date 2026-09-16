@@ -10,7 +10,11 @@ class TipoNotificacion:
     MATRICULA_NO_ENCONTRADA = "Matricula_No_Encontrada"
     MATRICULA_TIMEOUT = "Matricula_Timeout"
     MATRICULA_YA_FIDELIZADA = "Matricula_Ya_Fidelizada"
+    MATRICULA_VENCIDA = "Matricula_Vencida"
+    MATRICULA_NOMBRE_NO_COINCIDE = "Matricula_Nombre_No_Coincide"
     MATRICULA_REEMPLAZO_SOLICITADO = "Matricula_Reemplazo_Solicitado"
+    MATRICULA_REEMPLAZO_PENDIENTE = "Matricula_Reemplazo_Pendiente"
+    MATRICULA_REEMPLAZO_RESUELTO = "Matricula_Reemplazo_Resuelto"
 
 
 class EstadoNotificacion:
@@ -44,6 +48,12 @@ class Notificacion(Base):
 
     resena_id = Column(Integer, ForeignKey("resenas.id_resena", ondelete="CASCADE"), nullable=True)
 
+    # HU-02: seteado en las notificaciones de matrícula (avisos al Oferente y
+    # pedido de reemplazo al Administrador). NULL en las de reseña.
+    validacion_matricula_id = Column(
+        Integer, ForeignKey("validaciones_matricula.id_validacion", ondelete="CASCADE"), nullable=True
+    )
+
     # Momento del hecho notificado: para HU-01, cuándo cargó la reseña el
     # cliente, no cuándo la moderó el Profesional.
     fecha_creacion = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -51,6 +61,7 @@ class Notificacion(Base):
 
     usuario = relationship("Usuario", back_populates="notificaciones")
     resena = relationship("Resena", back_populates="notificaciones")
+    validacion_matricula = relationship("ValidacionMatricula")
 
 
 Index("idx_notificacion_usuario_estado", Notificacion.usuario_id, Notificacion.estado)

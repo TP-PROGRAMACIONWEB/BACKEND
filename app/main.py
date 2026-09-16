@@ -7,13 +7,14 @@ from app.models import (  # noqa: F401
     alerta_admin,
     archivo_adjunto,
     categoria,
+    matricula,
     notificacion,
     oferente,
     resena,
     solicitud_resena,
     usuario,
 )
-from app.routers import admin, auth, categorias, notificaciones, oferentes, resenas
+from app.routers import admin, auth, categorias, matriculas, notificaciones, oferentes, resenas
 
 tags_metadata = [
     {"name": "Autenticación", "description": "Registro, inicio y cierre de sesión de Oferentes (RF1, RF4, HU-03)."},
@@ -23,6 +24,10 @@ tags_metadata = [
     {
         "name": "Notificaciones",
         "description": "Bandeja in-app (la campana): reseñas esperando decisión y avisos al usuario (HU-01, HU-02).",
+    },
+    {
+        "name": "Matrículas",
+        "description": "Validación de matrícula profesional contra el padrón cargado, síncrona (HU-02).",
     },
     {"name": "Administración", "description": "Gestión de usuarios, verificación de matrícula, alertas y moderación (RF14-RF18)."},
 ]
@@ -65,6 +70,7 @@ app.include_router(oferentes.router)
 app.include_router(categorias.router)
 app.include_router(resenas.router)
 app.include_router(notificaciones.router)
+app.include_router(matriculas.router)
 app.include_router(admin.router)
 
 

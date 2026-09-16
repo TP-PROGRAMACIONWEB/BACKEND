@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Offix API",
-    "description": "API REST del backend de Offix, red social de oficios (UTN FRSF).\n\n### Cómo autenticarse\n1. `POST /api/v1/auth/registro` para crear un usuario.\n2. `POST /api/v1/auth/login` para obtener un `access_token` (JWT).\n3. Enviarlo en cada request protegida como header `Authorization: Bearer <access_token>` (en Swagger UI: botón **Authorize**, arriba a la derecha).\n\n### Para el equipo de QA (Hoppscotch)\nEl spec completo también está disponible en `/openapi.json` y como archivo estático en `docs/openapi.json` del repo — se puede importar directo en Hoppscotch como colección.\n\n### Estado del proyecto\nSprint 1 — flujo de reseña (HU-01) con validación de enlace simulada, sin envío real de mail/WhatsApp. Ver `docs/plan-sprint-1.md` para el detalle de alcance y decisiones.",
+    "description": "API REST del backend de Offix, red social de oficios (UTN FRSF).\n\n### Cómo autenticarse\n1. `POST /api/v1/auth/registro` para crear un usuario.\n2. `POST /api/v1/auth/login` para obtener un `access_token` (JWT).\n3. Enviarlo en cada request protegida como header `Authorization: Bearer <access_token>` (en Swagger UI: botón **Authorize**, arriba a la derecha).\n\n### Para el equipo de QA (Hoppscotch)\nEl spec completo también está disponible en `/openapi.json` y como archivo estático en `docs/openapi.json` del repo — se puede importar directo en Hoppscotch como colección.\n\n### Estado del proyecto\nSprint 1 — flujo de reseña (HU-01): el enlace se genera desde el perfil público y se envía por WhatsApp (link `wa.me` con el mensaje precargado) y/o por correo. Ver `docs/plan-sprint-1.md` para el detalle de alcance y decisiones.",
     "contact": {
       "name": "Equipo Offix - UTN FRSF"
     },
@@ -558,17 +558,11 @@
     "/api/v1/oferentes/{oferente_id}/solicitudes-resena": {
       "post": {
         "tags": [
-          "Reseñas",
           "Reseñas"
         ],
-        "summary": "Generar enlace de reseña desde el perfil del oferente",
-        "description": "RF10 — El Oferente (logueado) genera el enlace único de reseña para\ncompartirlo con su cliente.\n\nNo recibe datos del cliente: en este camino el Oferente elige el contacto\ndentro de WhatsApp, así que el sistema no sabe a quién se lo mandó. Esos\ndatos los carga el propio cliente al completar la reseña.\n\nFase 4 del plan: este endpoint se muda a `/whatsapp` y pasa a devolver\ntambién la URL de WhatsApp ya armada con el texto predefinido.",
+        "summary": "Generar el enlace de reseña desde el perfil público (HU-01, sin login)",
+        "description": "RF10 / HU-01 — Cualquiera que esté en el perfil público presiona\n\"Calificar\", carga los **Datos del Cliente** y genera el enlace. No hace\nfalta estar logueado: el botón lo ve tanto un cliente como el propio\nProfesional.\n\nEl canal lo define el dato cargado:\n\n- **teléfono** → se devuelve la `whatsapp_url` con el mensaje precargado;\n  el envío lo dispara una persona presionando \"enviar\" en WhatsApp;\n- **correo** → se manda el mail con el mismo texto;\n- **los dos** → se hacen las dos cosas.",
         "operationId": "generar_solicitud_resena_api_v1_oferentes__oferente_id__solicitudes_resena_post",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
         "parameters": [
           {
             "name": "oferente_id",
@@ -580,6 +574,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudResenaCreate"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Successful Response",
@@ -591,14 +595,50 @@
               }
             }
           },
-          "401": {
-            "description": "Falta token o es inválido"
-          },
-          "403": {
-            "description": "El oferente autenticado no es el dueño del perfil"
-          },
           "404": {
             "description": "Oferente no encontrado"
+          },
+          "422": {
+            "description": "Falta el nombre, no se cargó ningún contacto, o el teléfono tiene formato inválido"
+          },
+          "502": {
+            "description": "No se pudo enviar el correo con el enlace"
+          }
+        }
+      }
+    },
+    "/api/v1/solicitudes-resena/{codigo_unico}": {
+      "get": {
+        "tags": [
+          "Reseñas"
+        ],
+        "summary": "Datos precargados del formulario de reseña (público)",
+        "description": "HU-01 — Alimenta el \"Formulario de Reseña del Servicio\": el cliente ve su\nnombre y sus datos de contacto **precargados y bloqueados**, y la vista sabe\nsi el enlace todavía se puede usar (un solo uso, 7 días de validez).",
+        "operationId": "ver_solicitud_resena_api_v1_solicitudes_resena__codigo_unico__get",
+        "parameters": [
+          {
+            "name": "codigo_unico",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Codigo Unico"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SolicitudResenaVistaOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El código no existe"
           },
           "422": {
             "description": "Validation Error",
@@ -618,8 +658,8 @@
         "tags": [
           "Reseñas"
         ],
-        "summary": "Registrar una reseña (paso 2 del flujo HU-01, público, sin login)",
-        "description": "RF10 — El cliente deja la reseña accediendo exclusivamente vía el\n`codigo_unico` recibido en el enlace/QR, sin necesidad de loguearse. Queda\nen estado `Pendiente_Aprobacion` hasta que el Oferente la modere\n(`PATCH /resenas/{id}/moderar`).",
+        "summary": "Registrar una reseña (público, sin login)",
+        "description": "RF10 — El cliente deja la reseña accediendo con el `codigo_unico` del\nenlace, sin loguearse. Los datos del cliente **no viajan en el body**: se\ncopian de la solicitud, que es donde quedaron registrados al generar el\nenlace. Queda en `Pendiente_Aceptacion` y, en la misma transacción, se crea\nla notificación en la bandeja del Profesional, que es donde la resuelve.",
         "operationId": "registrar_resena_api_v1_resenas_post",
         "requestBody": {
           "content": {
@@ -643,10 +683,10 @@
             }
           },
           "400": {
-            "description": "codigo_unico inexistente o ya utilizado"
+            "description": "El enlace no existe, ya se usó o venció"
           },
           "422": {
-            "description": "Falta un campo obligatorio o un criterio está fuera de 1-5"
+            "description": "Falta un criterio, está fuera de escala, o el comentario supera los 200 caracteres"
           }
         }
       }
@@ -656,8 +696,8 @@
         "tags": [
           "Reseñas"
         ],
-        "summary": "Listar reseñas aprobadas de un oferente (público)",
-        "description": "RF7 — Solo devuelve reseñas en estado `Aprobada`; las pendientes y\nrechazadas no son visibles públicamente.",
+        "summary": "Listar reseñas aceptadas de un oferente (público)",
+        "description": "RF7 — Solo devuelve reseñas en estado `Aceptada`; las pendientes y\nrechazadas no son visibles públicamente ni suman al promedio.",
         "operationId": "listar_resenas_publicas_api_v1_oferentes__oferente_id__resenas_get",
         "parameters": [
           {
@@ -703,8 +743,8 @@
         "tags": [
           "Reseñas"
         ],
-        "summary": "Aprobar o rechazar una reseña pendiente",
-        "description": "RF11/RF13 — El Oferente aprueba o rechaza la reseña. Si se rechazan 5 o\nmás de las últimas 10 reseñas del oferente, se genera automáticamente una\n`AlertaAdministrador` (RF11) visible en `GET /admin/alertas`.",
+        "summary": "Aceptar o rechazar una reseña pendiente desde la bandeja",
+        "description": "RF11/RF13 — El Profesional resuelve desde la campana la reseña que le\nllegó. Al **aceptar**, la reseña se publica en el perfil y se recalcula el\npromedio; al **rechazar**, no se publica ni suma al promedio. En las dos\nramas se cierra la notificación asociada **en la misma transacción**.\n\nSi se rechazan 5 o más de las últimas 10 reseñas del oferente, se genera\nautomáticamente una `AlertaAdministrador` (RF11) visible en\n`GET /admin/alertas`.\n\nLa respuesta incluye el contacto del cliente: la ve solo el dueño.",
         "operationId": "moderar_resena_api_v1_resenas__resena_id__moderar_patch",
         "security": [
           {
@@ -738,13 +778,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ResenaOut"
+                  "$ref": "#/components/schemas/ResenaPrivadaOut"
                 }
               }
             }
           },
           "400": {
-            "description": "La reseña ya fue moderada (no está Pendiente_Aprobacion)"
+            "description": "La reseña ya fue moderada (no está Pendiente_Aceptacion)"
           },
           "401": {
             "description": "Falta token o es inválido"
@@ -766,6 +806,246 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/notificaciones": {
+      "get": {
+        "tags": [
+          "Notificaciones"
+        ],
+        "summary": "Bandeja de notificaciones del usuario autenticado",
+        "description": "HU-01 / CA04 — Lo que se despliega al abrir la campana, **más recientes\nprimero**. Cada tarjeta de reseña muestra los datos de contacto que cargó el\ncliente y la fecha, para que el Profesional pueda verificar la identidad y\ncomunicarse. Sirve tanto al Oferente como al Administrador: la bandeja es\ndel usuario, no del perfil.",
+        "operationId": "listar_notificaciones_api_v1_notificaciones_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NotificacionOut"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Notificaciones Api V1 Notificaciones Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/notificaciones/contador": {
+      "get": {
+        "tags": [
+          "Notificaciones"
+        ],
+        "summary": "Cantidad de notificaciones pendientes, para el badge de la campana",
+        "description": "Solo cuenta las del usuario autenticado. Devuelve las dos cifras\n(pendientes de decisión y total sin leer) mientras siga abierta la\npregunta #3 del plan sobre qué número muestra el badge.",
+        "operationId": "contar_notificaciones_api_v1_notificaciones_contador_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContadorNotificacionesOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/notificaciones/{notificacion_id}/leer": {
+      "patch": {
+        "tags": [
+          "Notificaciones"
+        ],
+        "summary": "Marcar como leída una notificación informativa",
+        "description": "Cierre de las informativas (los resultados de validación de matrícula),\nque quedan guardadas en la campana hasta que el Profesional las abre. Las\nque esperan una decisión no se cierran por acá: se resuelven aceptando o\nrechazando la reseña.",
+        "operationId": "marcar_leida_api_v1_notificaciones__notificacion_id__leer_patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "notificacion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Notificacion Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificacionOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "400": {
+            "description": "La notificación espera Aceptar/Rechazar, o ya se cerró"
+          },
+          "403": {
+            "description": "La notificación es de otro usuario"
+          },
+          "404": {
+            "description": "Notificación no encontrada"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/oferentes/me/matriculas/validaciones": {
+      "get": {
+        "tags": [
+          "Matrículas"
+        ],
+        "summary": "Historial de intentos de validación, incluidos los fallidos",
+        "operationId": "listar_validaciones_api_v1_oferentes_me_matriculas_validaciones_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ValidacionHistorialOut"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Validaciones Api V1 Oferentes Me Matriculas Validaciones Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "404": {
+            "description": "El usuario autenticado no tiene perfil de Oferente"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Matrículas"
+        ],
+        "summary": "Validar (fidelizar) una matrícula profesional contra el padrón",
+        "description": "HU-02 — El Profesional logueado carga tipo y número; la validación es\n**síncrona**, contra el padrón cargado en la base (con timeout de\n`settings.matricula_timeout_segundos`, simulado con la matrícula trampa).\nDevuelve un código de `resultado` con su mensaje; el frontend lo renderiza.",
+        "operationId": "crear_validacion_api_v1_oferentes_me_matriculas_validaciones_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidacionMatriculaIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidacionMatriculaOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "404": {
+            "description": "El usuario autenticado no tiene perfil de Oferente"
+          },
+          "422": {
+            "description": "Tipo inválido, o el número no tiene la cantidad de dígitos exigida"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/oferentes/me/matriculas": {
+      "get": {
+        "tags": [
+          "Matrículas"
+        ],
+        "summary": "Matrículas fidelizadas del Profesional autenticado",
+        "operationId": "listar_matriculas_api_v1_oferentes_me_matriculas_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MatriculaOut"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Matriculas Api V1 Oferentes Me Matriculas Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "404": {
+            "description": "El usuario autenticado no tiene perfil de Oferente"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/v1/admin/usuarios": {
@@ -1060,6 +1340,76 @@
         }
       }
     },
+    "/api/v1/admin/matriculas/reemplazos/{id_validacion}": {
+      "patch": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Autorizar o denegar un reemplazo de matrícula pedido por un Oferente",
+        "description": "HU-02 — Mientras el Administrador no decide, sigue vigente la matrícula\nanterior: el reemplazo recién se aplica acá. En la misma transacción se\ncierra la notificación accionable del Administrador y se avisa al\nOferente del resultado.",
+        "operationId": "resolver_reemplazo_matricula_api_v1_admin_matriculas_reemplazos__id_validacion__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_validacion",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Id Validacion"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReemplazoResolucionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReemplazoResueltoOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "Requiere rol Administrador"
+          },
+          "400": {
+            "description": "El reemplazo ya fue resuelto (o fue reemplazado por un pedido más nuevo)"
+          },
+          "404": {
+            "description": "No hay un pedido de reemplazo con ese id"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -1091,14 +1441,14 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 1000
+                "maxLength": 200
               },
               {
                 "type": "null"
               }
             ],
             "title": "Comentario",
-            "description": "Comentario de texto libre, opcional."
+            "description": "Comentario de texto libre, opcional (máx. 200 caracteres)."
           }
         },
         "type": "object",
@@ -1218,6 +1568,31 @@
         "type": "object",
         "title": "CategoriaUpdate"
       },
+      "ContadorNotificacionesOut": {
+        "properties": {
+          "pendientes_de_accion": {
+            "type": "integer",
+            "title": "Pendientes De Accion",
+            "description": "Pendientes que esperan una decisión. Es el contador que define el DER."
+          },
+          "sin_leer": {
+            "type": "integer",
+            "title": "Sin Leer",
+            "description": "Todas las pendientes, incluidas las informativas que todavía no se abrieron."
+          }
+        },
+        "type": "object",
+        "required": [
+          "pendientes_de_accion",
+          "sin_leer"
+        ],
+        "title": "ContadorNotificacionesOut",
+        "description": "Alimenta el badge de la campana.\n\nSe devuelven los dos números porque los documentos no coinciden: los casos\nde prueba hablan de \"las notificaciones pendientes de rechazo/aceptación\",\npero las informativas de matrícula también quedan guardadas hasta abrirse\n(pregunta abierta #3 del plan). Con las dos cifras, el frontend puede\nmostrar una u otra sin tocar el backend cuando se defina.",
+        "example": {
+          "pendientes_de_accion": 2,
+          "sin_leer": 5
+        }
+      },
       "CriteriosValoracion": {
         "properties": {
           "precio": {
@@ -1299,6 +1674,218 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "MatriculaOut": {
+        "properties": {
+          "id_matricula": {
+            "type": "integer",
+            "title": "Id Matricula"
+          },
+          "tipo_profesional": {
+            "type": "string",
+            "title": "Tipo Profesional"
+          },
+          "numero_matricula": {
+            "type": "string",
+            "title": "Numero Matricula"
+          },
+          "categoria": {
+            "type": "string",
+            "title": "Categoria"
+          },
+          "fecha_vencimiento": {
+            "type": "string",
+            "format": "date",
+            "title": "Fecha Vencimiento"
+          },
+          "fecha_fidelizacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Fidelizacion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_matricula",
+          "tipo_profesional",
+          "numero_matricula",
+          "categoria",
+          "fecha_vencimiento",
+          "fecha_fidelizacion"
+        ],
+        "title": "MatriculaOut"
+      },
+      "NotificacionOut": {
+        "properties": {
+          "id_notificacion": {
+            "type": "integer",
+            "title": "Id Notificacion"
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo",
+            "description": "Resena_Nueva | Matricula_* — discrimina el origen de la notificación."
+          },
+          "mensaje": {
+            "type": "string",
+            "title": "Mensaje"
+          },
+          "requiere_accion": {
+            "type": "boolean",
+            "title": "Requiere Accion",
+            "description": "true si espera Aceptar/Rechazar; false si es informativa y solo se marca leída."
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado",
+            "description": "Pendiente | Aceptada | Rechazada | Leida"
+          },
+          "resena_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resena Id"
+          },
+          "nombre_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre Cliente",
+            "description": "Solo en las notificaciones de reseña."
+          },
+          "telefono_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono Cliente"
+          },
+          "email_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Cliente"
+          },
+          "validacion_matricula_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validacion Matricula Id",
+            "description": "Solo en las notificaciones de matrícula."
+          },
+          "oferente_nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oferente Nombre",
+            "description": "Nombre del Profesional. Solo en las de reemplazo de matrícula."
+          },
+          "tipo_profesional": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tipo Profesional"
+          },
+          "numero_matricula_actual": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Matricula Actual",
+            "description": "Matrícula vigente antes del reemplazo pedido."
+          },
+          "numero_matricula_solicitada": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numero Matricula Solicitada",
+            "description": "Matrícula nueva que espera autorización."
+          },
+          "fecha_creacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Creacion",
+            "description": "Fecha del hecho notificado. Para una reseña, cuándo la cargó el cliente, no cuándo se moderó."
+          },
+          "fecha_resolucion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fecha Resolucion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_notificacion",
+          "tipo",
+          "mensaje",
+          "requiere_accion",
+          "estado",
+          "fecha_creacion"
+        ],
+        "title": "NotificacionOut",
+        "description": "Una tarjeta de la bandeja.\n\nPara las de `Resena_Nueva` trae **los datos de contacto del cliente y la\nfecha**, que es con lo que el Profesional verifica la identidad antes de\ndecidir. Nunca trae el contenido de la reseña: ni la puntuación ni el\ncomentario, que recién se publican si la acepta.",
+        "example": {
+          "email_cliente": "juan@example.com",
+          "estado": "Pendiente",
+          "fecha_creacion": "2026-09-15T14:32:00Z",
+          "id_notificacion": 1,
+          "mensaje": "Juan Cliente (3516924551 / juan@example.com) dejó una reseña sobre tu trabajo. Revisá los datos de contacto y decidí si la aceptás.",
+          "nombre_cliente": "Juan Cliente",
+          "requiere_accion": true,
+          "resena_id": 7,
+          "telefono_cliente": "3516924551",
+          "tipo": "Resena_Nueva"
+        }
       },
       "OferenteCreate": {
         "properties": {
@@ -1571,9 +2158,11 @@
             "type": "integer",
             "title": "Cantidad Rechazos Acumulados"
           },
-          "notificaciones_email_habilitadas": {
+          "tiene_matricula_validada": {
             "type": "boolean",
-            "title": "Notificaciones Email Habilitadas"
+            "title": "Tiene Matricula Validada",
+            "description": "HU-02: true con al menos una matrícula fidelizada contra el padrón.",
+            "default": false
           }
         },
         "type": "object",
@@ -1585,8 +2174,7 @@
           "id_oferente",
           "estado_verificacion",
           "promedio_calificacion",
-          "cantidad_rechazos_acumulados",
-          "notificaciones_email_habilitadas"
+          "cantidad_rechazos_acumulados"
         ],
         "title": "OferenteOut"
       },
@@ -1734,22 +2322,55 @@
               }
             ],
             "title": "Descripcion"
-          },
-          "notificaciones_email_habilitadas": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notificaciones Email Habilitadas",
-            "description": "Si está en false, el oferente deja de recibir avisos por correo de reseñas nuevas."
           }
         },
         "type": "object",
         "title": "OferenteUpdate"
+      },
+      "ReemplazoResolucionIn": {
+        "properties": {
+          "autorizar": {
+            "type": "boolean",
+            "title": "Autorizar",
+            "description": "true = autoriza el reemplazo; false = lo deniega."
+          }
+        },
+        "type": "object",
+        "required": [
+          "autorizar"
+        ],
+        "title": "ReemplazoResolucionIn",
+        "example": {
+          "autorizar": true
+        }
+      },
+      "ReemplazoResueltoOut": {
+        "properties": {
+          "id_validacion": {
+            "type": "integer",
+            "title": "Id Validacion"
+          },
+          "estado_reemplazo": {
+            "type": "string",
+            "title": "Estado Reemplazo"
+          },
+          "matricula": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatriculaOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_validacion",
+          "estado_reemplazo"
+        ],
+        "title": "ReemplazoResueltoOut"
       },
       "ResenaAdminOut": {
         "properties": {
@@ -1776,7 +2397,7 @@
           "estado": {
             "type": "string",
             "title": "Estado",
-            "description": "Pendiente_Verificacion | Pendiente_Aprobacion | Aprobada | Rechazada"
+            "description": "Pendiente_Aceptacion | Aceptada | Rechazada"
           },
           "fecha_creacion": {
             "type": "string",
@@ -1808,19 +2429,6 @@
             "title": "Codigo Unico",
             "description": "Código del enlace de reseña."
           },
-          "nombre_cliente": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 2,
-            "title": "Nombre Cliente"
-          },
-          "contacto_cliente_ingresado": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 3,
-            "title": "Contacto Cliente Ingresado",
-            "description": "Mail del cliente que deja la reseña."
-          },
           "calificaciones_comentarios": {
             "$ref": "#/components/schemas/CalificacionesComentariosIn"
           }
@@ -1828,11 +2436,10 @@
         "type": "object",
         "required": [
           "codigo_unico",
-          "nombre_cliente",
-          "contacto_cliente_ingresado",
           "calificaciones_comentarios"
         ],
         "title": "ResenaCreate",
+        "description": "Los datos del cliente ya no viajan en el body: salen de la solicitud.",
         "example": {
           "calificaciones_comentarios": {
             "comentario": "Excelente trabajo, muy prolijo y llegó puntual.",
@@ -1843,26 +2450,24 @@
               "puntualidad": 4.5
             }
           },
-          "codigo_unico": "a1b2c3d4e5f6",
-          "contacto_cliente_ingresado": "juan.cliente@example.com",
-          "nombre_cliente": "Juan Cliente"
+          "codigo_unico": "a1b2c3d4e5f6"
         }
       },
       "ResenaModeracion": {
         "properties": {
-          "aprobar": {
+          "aceptar": {
             "type": "boolean",
-            "title": "Aprobar",
-            "description": "true = aprobar y publicar la reseña; false = rechazarla."
+            "title": "Aceptar",
+            "description": "true = aceptar y publicar la reseña; false = rechazarla."
           }
         },
         "type": "object",
         "required": [
-          "aprobar"
+          "aceptar"
         ],
         "title": "ResenaModeracion",
         "example": {
-          "aprobar": true
+          "aceptar": true
         }
       },
       "ResenaOut": {
@@ -1890,7 +2495,7 @@
           "estado": {
             "type": "string",
             "title": "Estado",
-            "description": "Pendiente_Verificacion | Pendiente_Aprobacion | Aprobada | Rechazada"
+            "description": "Pendiente_Aceptacion | Aceptada | Rechazada"
           },
           "fecha_creacion": {
             "type": "string",
@@ -1910,6 +2515,74 @@
         ],
         "title": "ResenaOut"
       },
+      "ResenaPrivadaOut": {
+        "properties": {
+          "id_resena": {
+            "type": "integer",
+            "title": "Id Resena"
+          },
+          "oferente_id": {
+            "type": "integer",
+            "title": "Oferente Id"
+          },
+          "solicitud_id": {
+            "type": "integer",
+            "title": "Solicitud Id"
+          },
+          "nombre_cliente": {
+            "type": "string",
+            "title": "Nombre Cliente"
+          },
+          "calificaciones_comentarios": {
+            "type": "object",
+            "title": "Calificaciones Comentarios"
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado",
+            "description": "Pendiente_Aceptacion | Aceptada | Rechazada"
+          },
+          "fecha_creacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Creacion"
+          },
+          "telefono_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono Cliente"
+          },
+          "email_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Cliente"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_resena",
+          "oferente_id",
+          "solicitud_id",
+          "nombre_cliente",
+          "calificaciones_comentarios",
+          "estado",
+          "fecha_creacion"
+        ],
+        "title": "ResenaPrivadaOut",
+        "description": "Lo que ve el Profesional dueño de la reseña. A diferencia de la salida\npública, expone el contacto del cliente: es una decisión explícita del\nequipo, para que pueda verificar la identidad y comunicarse."
+      },
       "RolUsuario": {
         "type": "string",
         "enum": [
@@ -1917,6 +2590,53 @@
           "Administrador"
         ],
         "title": "RolUsuario"
+      },
+      "SolicitudResenaCreate": {
+        "properties": {
+          "nombre_cliente": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 2,
+            "title": "Nombre Cliente",
+            "description": "Nombre del cliente. Obligatorio."
+          },
+          "telefono_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono Cliente",
+            "description": "10 dígitos: 3 o 4 de código de área + 7 o 6 de línea. Se acepta el guión (`351-6924551`). Sin 0, sin 15 y sin +54."
+          },
+          "email_cliente": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Cliente",
+            "description": "Correo del cliente, con validación estándar de email."
+          }
+        },
+        "type": "object",
+        "required": [
+          "nombre_cliente"
+        ],
+        "title": "SolicitudResenaCreate",
+        "description": "Modal \"Datos del Cliente\" del perfil público. El nombre es obligatorio y\nhay que cargar **al menos uno** de los dos datos de contacto; se pueden\ncargar los dos y entonces se usan los dos canales.",
+        "example": {
+          "email_cliente": "juan.cliente@example.com",
+          "nombre_cliente": "Juan Cliente",
+          "telefono_cliente": "351-6924551"
+        }
       },
       "SolicitudResenaOut": {
         "properties": {
@@ -1936,9 +2656,13 @@
           "origen": {
             "type": "string",
             "title": "Origen",
-            "description": "Cliente_Email | Oferente_WhatsApp"
+            "description": "WhatsApp | Email | Ambos — canal por el que se envía el enlace."
           },
           "nombre_cliente": {
+            "type": "string",
+            "title": "Nombre Cliente"
+          },
+          "telefono_cliente": {
             "anyOf": [
               {
                 "type": "string"
@@ -1947,8 +2671,7 @@
                 "type": "null"
               }
             ],
-            "title": "Nombre Cliente",
-            "description": "Solo viene cargado si el enlace lo pidió el cliente por correo."
+            "title": "Telefono Cliente"
           },
           "email_cliente": {
             "anyOf": [
@@ -1972,16 +2695,31 @@
             "title": "Fecha Generacion"
           },
           "fecha_expiracion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Expiracion"
+          },
+          "url_resena": {
+            "type": "string",
+            "title": "Url Resena",
+            "description": "Link del formulario de reseña, para compartir."
+          },
+          "whatsapp_url": {
             "anyOf": [
               {
-                "type": "string",
-                "format": "date-time"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Fecha Expiracion"
+            "title": "Whatsapp Url",
+            "description": "Chat de WhatsApp con el mensaje precargado. Solo viene si se cargó teléfono. El envío lo dispara el usuario."
+          },
+          "email_enviado": {
+            "type": "boolean",
+            "title": "Email Enviado",
+            "description": "true si se mandó el correo con el enlace."
           }
         },
         "type": "object",
@@ -1990,10 +2728,109 @@
           "oferente_id",
           "codigo_unico",
           "origen",
+          "nombre_cliente",
           "estado",
-          "fecha_generacion"
+          "fecha_generacion",
+          "fecha_expiracion",
+          "url_resena",
+          "email_enviado"
         ],
-        "title": "SolicitudResenaOut"
+        "title": "SolicitudResenaOut",
+        "description": "Respuesta de la generación del enlace. Según qué contacto se cargó, trae\nla `whatsapp_url` armada, el correo ya enviado, o las dos cosas."
+      },
+      "SolicitudResenaVistaOut": {
+        "properties": {
+          "codigo_unico": {
+            "type": "string",
+            "title": "Codigo Unico"
+          },
+          "oferente_id": {
+            "type": "integer",
+            "title": "Oferente Id"
+          },
+          "nombre_oferente": {
+            "type": "string",
+            "title": "Nombre Oferente",
+            "description": "Nombre y apellido del Profesional que se va a calificar."
+          },
+          "nombre_cliente": {
+            "type": "string",
+            "title": "Nombre Cliente"
+          },
+          "telefono_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telefono Cliente"
+          },
+          "email_cliente": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Cliente",
+            "description": "Viene vacío el dato de contacto que no se haya cargado."
+          },
+          "estado": {
+            "type": "string",
+            "title": "Estado",
+            "description": "Pendiente_Uso | Utilizada | Expirada"
+          },
+          "vencida": {
+            "type": "boolean",
+            "title": "Vencida",
+            "description": "true si pasaron más de los días de validez desde la generación."
+          },
+          "utilizable": {
+            "type": "boolean",
+            "title": "Utilizable",
+            "description": "true solo si el enlace sigue sin usar y no venció: la vista habilita la carga."
+          },
+          "fecha_generacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Generacion"
+          },
+          "fecha_expiracion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Expiracion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "codigo_unico",
+          "oferente_id",
+          "nombre_oferente",
+          "nombre_cliente",
+          "estado",
+          "vencida",
+          "utilizable",
+          "fecha_generacion",
+          "fecha_expiracion"
+        ],
+        "title": "SolicitudResenaVistaOut",
+        "description": "Alimenta el \"Formulario de Reseña del Servicio\": datos precargados y\nbloqueados, más el estado del enlace.",
+        "example": {
+          "codigo_unico": "a1b2c3d4e5f6",
+          "estado": "Pendiente_Uso",
+          "fecha_expiracion": "2026-09-22T10:00:00Z",
+          "nombre_cliente": "Juan Cliente",
+          "nombre_oferente": "María Gómez",
+          "oferente_id": 1,
+          "telefono_cliente": "3516924551",
+          "utilizable": true,
+          "vencida": false
+        }
       },
       "Token": {
         "properties": {
@@ -2093,6 +2930,114 @@
         ],
         "title": "UsuarioOut"
       },
+      "ValidacionHistorialOut": {
+        "properties": {
+          "id_validacion": {
+            "type": "integer",
+            "title": "Id Validacion"
+          },
+          "tipo_profesional": {
+            "type": "string",
+            "title": "Tipo Profesional"
+          },
+          "numero_matricula": {
+            "type": "string",
+            "title": "Numero Matricula"
+          },
+          "resultado": {
+            "type": "string",
+            "title": "Resultado"
+          },
+          "estado_reemplazo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estado Reemplazo",
+            "description": "Solo cuando resultado = Reemplazo_Solicitado."
+          },
+          "fecha_intento": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Intento"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_validacion",
+          "tipo_profesional",
+          "numero_matricula",
+          "resultado",
+          "fecha_intento"
+        ],
+        "title": "ValidacionHistorialOut"
+      },
+      "ValidacionMatriculaIn": {
+        "properties": {
+          "tipo_profesional": {
+            "type": "string",
+            "enum": [
+              "Gasista",
+              "Aire acondicionado"
+            ],
+            "title": "Tipo Profesional"
+          },
+          "numero_matricula": {
+            "type": "string",
+            "title": "Numero Matricula",
+            "description": "Solo dígitos. 10 para Gasista, 9 para Aire acondicionado."
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo_profesional",
+          "numero_matricula"
+        ],
+        "title": "ValidacionMatriculaIn",
+        "description": "Datos del bloque de fidelización del perfil: el botón Confirmar se\nhabilita recién con los dos campos completos y la cantidad de dígitos\ncorrecta para el tipo elegido.",
+        "example": {
+          "numero_matricula": "1000008919",
+          "tipo_profesional": "Gasista"
+        }
+      },
+      "ValidacionMatriculaOut": {
+        "properties": {
+          "resultado": {
+            "type": "string",
+            "title": "Resultado",
+            "description": "Validada | No_Encontrada | Timeout | Ya_Fidelizada | Reemplazo_Solicitado | Vencida | Nombre_No_Coincide"
+          },
+          "mensaje": {
+            "type": "string",
+            "title": "Mensaje"
+          },
+          "matricula": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatriculaOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "La matrícula vigente del oficio, si ya hay una fidelizada."
+          }
+        },
+        "type": "object",
+        "required": [
+          "resultado",
+          "mensaje"
+        ],
+        "title": "ValidacionMatriculaOut",
+        "example": {
+          "mensaje": "Su matrícula fue fidelizada exitosamente",
+          "resultado": "Validada"
+        }
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -2155,6 +3100,14 @@
     {
       "name": "Reseñas",
       "description": "Flujo de calificaciones y reseñas vía link/QR único (RF10-RF13, HU-01)."
+    },
+    {
+      "name": "Notificaciones",
+      "description": "Bandeja in-app (la campana): reseñas esperando decisión y avisos al usuario (HU-01, HU-02)."
+    },
+    {
+      "name": "Matrículas",
+      "description": "Validación de matrícula profesional contra el padrón cargado, síncrona (HU-02)."
     },
     {
       "name": "Administración",

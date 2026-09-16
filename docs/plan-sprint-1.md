@@ -640,9 +640,14 @@ profesor.**
 
 ### Fase 4 — HU-02: validación de matrícula
 
+> **Hecha, con alcance reducido a Gasista** (ver pregunta abierta #1): el
+> padrón de Aire acondicionado no llegó a tiempo, así que ese tipo queda
+> soportado por el código pero sin matrículas cargadas.
+
 - Carga de los padrones desde los `.md`, tablas `MATRICULA` y
   `VALIDACION_MATRICULA`.
-- Endpoint de validación síncrono con timeout de 60 s y los cinco resultados.
+- Endpoint de validación síncrono con timeout de 60 s y los siete resultados
+  (los cinco de QA más `Vencida` y `Nombre_No_Coincide`).
 - Autorización de reemplazo por el Administrador, con su notificación.
 - Regeneración de `docs/openapi.json` y `docs/openapi.md`.
 
@@ -670,24 +675,25 @@ profesor.**
 
 ## Preguntas abiertas
 
-1. **🔴 Padrón de Aire acondicionado.** Está por definirse. Ya está cargado el
-   de Gasistas (`app/db/padrones/gasistas.md`, 68 matriculados de 10 dígitos).
-   Hasta que llegue, HU-02 solo se puede demostrar con Gasista. **Cuando aparezca,
-   hay que confirmar que sus matrículas sean de 9 dígitos**: si también son de 10,
-   el CA01 está mal escrito.
-2. **Faltan cuatro textos de notificación** que ningún CA define:
-   - matrícula **vencida**;
-   - el nombre **no coincide** con el del padrón;
-   - reemplazo **pendiente** de autorización del Administrador;
-   - reemplazo **resuelto** (autorizado o denegado).
-
-   Una alternativa para las dos primeras es reusar el mensaje del CA04 ("Su
-   matrícula no fue encontrada en el padrón..."), que evita tocar los criterios de
-   aceptación, pero es engañoso: la matrícula sí existe, el problema es otro.
+1. **🔴 Padrón de Aire acondicionado.** Sigue sin llegar. La Fase 4 se
+   implementó y quedó demostrable **solo con Gasista**
+   (`app/db/padrones/gasistas.md`, 68 matriculados de 10 dígitos); el tipo
+   `Aire acondicionado` ya está soportado en el código (formato de 9 dígitos,
+   matrícula trampa `999999999`), así que cuando llegue el archivo real se
+   carga desde `app/db/seed.py` sin tocar nada más. **Cuando aparezca, hay que
+   confirmar que sus matrículas sean de 9 dígitos**: si también son de 10, el
+   CA01 está mal escrito.
+2. ~~Faltan cuatro textos de notificación~~ **Resuelto.** Los cuatro textos
+   (matrícula vencida, nombre no coincide, reemplazo pendiente, reemplazo
+   resuelto) quedaron definidos en `app/services/matriculas.py`
+   (`MENSAJES_RESULTADO` y los mensajes de `resolver_reemplazo`), sin reusar
+   el de CA04.
 3. **Contador de la campana.** Los casos de prueba dicen que el badge muestra "las
    notificaciones pendientes de rechazo/aceptación". Pero las informativas de
    matrícula también quedan guardadas hasta visualizarse. ¿El número las cuenta a
-   todas, o solo a las que esperan una decisión?
+   todas, o solo a las que esperan una decisión? Sigue sin definirse:
+   `GET /notificaciones/contador` devuelve las dos cifras
+   (`pendientes_de_accion` y `sin_leer`) para no bloquearse en esto.
 
 ## Correcciones a pedir sobre la documentación existente
 

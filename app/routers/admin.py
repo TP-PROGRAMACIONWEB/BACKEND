@@ -1,4 +1,5 @@
 import enum
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -6,12 +7,16 @@ from sqlalchemy.orm import Session
 from app.core.deps import require_admin
 from app.db.database import get_db
 from app.models.alerta_admin import AlertaAdministrador
+from app.models.matricula import EstadoReemplazo, ResultadoValidacion, ValidacionMatricula
+from app.models.notificacion import EstadoNotificacion, Notificacion
 from app.models.oferente import EstadoVerificacion, Oferente
 from app.models.resena import EstadoResena, Resena
 from app.models.usuario import EstadoCuenta, Usuario
+from app.schemas.matricula import ReemplazoResolucionIn, ReemplazoResueltoOut
 from app.schemas.oferente import OferenteOut
 from app.schemas.resena import ResenaAdminOut
 from app.schemas.usuario import UsuarioOut
+from app.services.matriculas import resolver_reemplazo
 from app.services.resenas import recalcular_promedio
 
 RESPUESTAS_ADMIN_COMUNES = {
@@ -120,3 +125,39 @@ def publicar_resena_rechazada(resena_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(resena)
     return resena
+
+
+@router.patch(
+    "/matriculas/reemplazos/{id_validacion}",
+    response_model=ReemplazoResueltoOut,
+    summary="Autorizar o denegar un reemplazo de matrícula pedido por un Oferente",
+    responses={
+        400: {"description": "El reemplazo ya fue resuelto (o fue reemplazado por un pedido más nuevo)"},
+        404: {"description": "No hay un pedido de reemplazo con ese id"},
+    },
+)
+def resolver_reemplazo_matricula(id_validacion: int, payload: ReemplazoResolucionIn, db: Session = Depends(get_db)):
+    """HU-02 — Mientras el Administrador no decide, sigue vigente la matrícula
+    anterior: el reemplazo recién se aplica acá. En la misma transacción se
+    cierra la notificación accionable del Administrador y se avisa al
+    Oferente del resultado."""
+    validacion = db.get(ValidacionMatricula, id_validacion)
+    if not validacion or validacion.resultado != ResultadoValidacion.REEMPLAZO_SOLICITADO:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No hay un pedido de reemplazo con ese id")
+    if validacion.estado_reemplazo != EstadoReemplazo.PENDIENTE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="El reemplazo ya fue resuelto")
+
+    matricula = resolver_reemplazo(db, validacion, payload.autorizar)
+
+    notificaciones_admin = (
+        db.query(Notificacion)
+        .filter(Notificacion.validacion_matricula_id == id_validacion, Notificacion.requiere_accion.is_(True))
+        .all()
+    )
+    for notificacion in notificaciones_admin:
+        notificacion.estado = EstadoNotificacion.ACEPTADA if payload.autorizar else EstadoNotificacion.RECHAZADA
+        notificacion.fecha_resolucion = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(validacion)
+    return ReemplazoResueltoOut(id_validacion=validacion.id_validacion, estado_reemplazo=validacion.estado_reemplazo, matricula=matricula)

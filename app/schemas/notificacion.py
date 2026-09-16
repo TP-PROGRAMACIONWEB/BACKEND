@@ -43,6 +43,12 @@ class NotificacionOut(BaseModel):
     telefono_cliente: str | None = None
     email_cliente: str | None = None
 
+    validacion_matricula_id: int | None = Field(default=None, description="Solo en las notificaciones de matrícula.")
+    oferente_nombre: str | None = Field(default=None, description="Nombre del Profesional. Solo en las de reemplazo de matrícula.")
+    tipo_profesional: str | None = None
+    numero_matricula_actual: str | None = Field(default=None, description="Matrícula vigente antes del reemplazo pedido.")
+    numero_matricula_solicitada: str | None = Field(default=None, description="Matrícula nueva que espera autorización.")
+
     fecha_creacion: datetime = Field(
         description="Fecha del hecho notificado. Para una reseña, cuándo la cargó el cliente, no cuándo se moderó."
     )

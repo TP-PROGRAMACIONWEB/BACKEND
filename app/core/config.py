@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     # Tiempo máximo de espera de la validación de matrícula (CA03 de HU-02).
     matricula_timeout_segundos: int = 60
 
+    # Matrícula trampa para que QA pueda probar el resultado Timeout sin
+    # esperar. Se puede desactivar para que no quede disponible en producción.
+    matricula_trap_habilitada: bool = True
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @property

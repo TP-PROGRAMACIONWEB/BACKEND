@@ -53,3 +53,12 @@ class Oferente(Base):
     solicitudes_resena = relationship("SolicitudResena", back_populates="oferente", cascade="all, delete-orphan")
     resenas = relationship("Resena", back_populates="oferente", cascade="all, delete-orphan")
     alertas = relationship("AlertaAdministrador", back_populates="oferente", cascade="all, delete-orphan")
+    matriculas = relationship("Matricula", back_populates="oferente", cascade="all, delete-orphan")
+    validaciones_matricula = relationship("ValidacionMatricula", back_populates="oferente", cascade="all, delete-orphan")
+
+    @property
+    def tiene_matricula_validada(self) -> bool:
+        """Distintivo de verificado de HU-02: aparece con al menos una
+        matrícula fidelizada, sin importar el `estado_verificacion` manual
+        (que queda como override aparte del Administrador)."""
+        return bool(self.matriculas)

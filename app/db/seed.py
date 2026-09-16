@@ -1,25 +1,34 @@
 """Carga datos de prueba para poder demostrar el flujo de Sprint 1: categorías
 de oficios, Oferentes de ejemplo (con su Usuario asociado), solicitudes de reseña
 ya generadas —una por canal— y una notificación pendiente en la bandeja, para
-poder mostrar la campana con contador sin generar una reseña primero.
+poder mostrar la campana con contador sin generar una reseña primero. También
+carga el padrón de matriculados de Gasista (HU-02).
 Idempotente: se puede correr varias veces sin duplicar datos.
 
 Uso: python -m app.db.seed
 """
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.database import Base, SessionLocal, engine
 from app.models import alerta_admin, archivo_adjunto  # noqa: F401 — registran sus mappers
 from app.models.categoria import Categoria
+from app.models.matricula import PadronMatricula, TipoProfesionalMatricula
 from app.models.notificacion import Notificacion
 from app.models.oferente import EstadoVerificacion, Oferente
 from app.models.resena import EstadoResena, Resena
 from app.models.solicitud_resena import EstadoSolicitud, OrigenSolicitud, SolicitudResena
 from app.models.usuario import RolUsuario, Usuario
 from app.services.notificaciones import crear_notificacion_resena_nueva
+from app.services.padrones import parsear_padron_md
+
+PADRONES = {
+    TipoProfesionalMatricula.GASISTA: Path(__file__).parent / "padrones" / "gasistas.md",
+}
+MATRICULA_DEMO_GASISTA = "1000008919"  # ALESSI MARIA CLARA, la primera fila del padrón real.
 
 PASSWORD_SEED = "Offix2026!"
 
@@ -44,8 +53,11 @@ OFERENTES_DEMO = [
     ),
     dict(
         email="maria.gomez@offix.example.com",
-        nombre="María",
-        apellido="Gómez",
+        # Nombre real del padrón de Gasistas (matrícula 1000008919), para
+        # poder demostrar HU-02 de punta a punta: con un nombre inventado el
+        # match contra el padrón lo rechaza.
+        nombre="María Clara",
+        apellido="Alessi",
         categoria="Gasista",
         dni_cuit="27-28333444-5",
         telefono="+54 3564 400222",
@@ -137,6 +149,28 @@ def get_or_create_oferente(db, categorias: dict[str, Categoria], datos: dict) ->
     return oferente
 
 
+def get_or_create_padron(db) -> int:
+    """Carga el padrón de Gasistas a la base si todavía no está. Devuelve la
+    cantidad de filas cargadas (0 si ya estaba)."""
+    cargadas = 0
+    for tipo, path in PADRONES.items():
+        if db.query(PadronMatricula).filter(PadronMatricula.tipo_profesional == tipo).first():
+            continue
+        for fila in parsear_padron_md(path):
+            db.add(
+                PadronMatricula(
+                    tipo_profesional=tipo,
+                    numero_matricula=fila.numero_matricula,
+                    nombre_matriculado=fila.nombre_matriculado,
+                    categoria=fila.categoria,
+                    fecha_vencimiento=fila.fecha_vencimiento,
+                )
+            )
+            cargadas += 1
+    db.flush()
+    return cargadas
+
+
 def get_or_create_admin(db) -> Usuario:
     admin = db.query(Usuario).filter(Usuario.email == "admin@offix.example.com").first()
     if admin:
@@ -222,6 +256,7 @@ def run():
         oferentes = [get_or_create_oferente(db, categorias, datos) for datos in OFERENTES_DEMO]
 
         get_or_create_admin(db)
+        padron_cargado = get_or_create_padron(db)
 
         # Un enlace por canal, para probar la vista de reseña sin depender del
         # correo ni de WhatsApp.
@@ -279,6 +314,11 @@ def run():
         print(f"  - canal WhatsApp: {CODIGO_SOLICITUD_WHATSAPP}")
         print(f"{oferentes[0].nombre} {oferentes[0].apellido} tiene una reseña aceptada de ejemplo en su perfil.")
         print(f"{oferentes[1].nombre} {oferentes[1].apellido} tiene 1 notificación pendiente en la campana.")
+        print(f"Padrón de Gasistas: {padron_cargado} matrículas cargadas (0 = ya estaba cargado).")
+        print(
+            f"Para probar HU-02: logueate como {oferentes[1].nombre} {oferentes[1].apellido} y validá "
+            f'{{"tipo_profesional": "Gasista", "numero_matricula": "{MATRICULA_DEMO_GASISTA}"}}'
+        )
     except Exception:
         db.rollback()
         raise
