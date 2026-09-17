@@ -326,13 +326,61 @@ Profesional las abre; recién ahí pasan a `Leida`. No son toasts efímeros.
 
 ## HU-03 — Iniciar y cerrar sesión
 
-**Sin cambios.** Ya está implementada, con tests en verde: login con JWT, rol en
-el claim, 401 genérico ante credenciales inválidas, 403 con cuenta suspendida o
-bloqueada, y logout stateless con 204.
+> **Corrección (revisión 6, 2026-09-16).** La revisión 4 decía "sin cambios" y
+> dejaba el login con Google fuera de alcance. Eso contradecía los CA01-CA04
+> reales de la HU, que piden login con Google como único método visible en la
+> pantalla de inicio de sesión. Ya está implementado: convive con el login por
+> email/password (decisión del equipo, para no romper nada de lo que ya
+> depende del JWT propio — moderación, admin, etc. sin tocar).
 
-El registro de usuarios **sale del set de HU**. Se mantiene `POST /auth/registro`
-como herramienta de carga (POST directo contra la API); a futuro el alta se hará
-con la API de Google, fuera del alcance de este sprint.
+Login por email/password: login con JWT, rol en el claim, 401 genérico ante
+credenciales inválidas, 403 con cuenta suspendida o bloqueada, y logout
+stateless con 204. Sin cambios respecto de la revisión 4.
+
+El registro de usuarios sigue fuera del set de HU. Se mantiene
+`POST /auth/registro` como herramienta de carga (POST directo contra la API).
+
+### Login con Google (CA01-CA04)
+
+Proveedor: **Auth0**, tenant tipo *Regular Web Application* — el backend tiene
+el `client_secret` y hace el intercambio del `code`; el frontend nunca lo ve.
+
+| Paso | Quién | Qué pasa |
+|---|---|---|
+| 1 | Frontend | Manda al usuario a `GET /api/v1/auth/google/login` |
+| 2 | Backend | Redirige a Auth0 (`/authorize`, `connection=google-oauth2`), con un `state` de un solo uso en una cookie de 5 minutos (protección CSRF del handshake) |
+| 3 | Usuario | Se autentica con Google |
+| 4 | Auth0 | Redirige a `AUTH0_CALLBACK_URL` (`GET /api/v1/auth/google/callback`) con un `code` |
+| 5 | Backend | Cambia el `code` por un token de Auth0, pide `/userinfo` (nombre, mail, si está verificado), crea o encuentra el `Usuario` por mail, y emite **el mismo JWT de siempre** |
+| 6 | Backend | **CA02** — redirige a `{FRONTEND_URL}{GOOGLE_LOGIN_RUTA_EXITO}?token=<jwt>` |
+| — | Backend | **CA03** — ante cualquier falla (Google/Auth0 rechazó, mail sin verificar, cuenta suspendida, `state` inválido), redirige a `{FRONTEND_URL}{GOOGLE_LOGIN_RUTA_ERROR}?error=auth_failed`, **sin** token |
+
+El JWT que devuelve este flujo es indistinguible del que devuelve
+`POST /auth/login`: el resto del backend (`get_current_user`, `require_admin`,
+todos los endpoints protegidos) no cambia una línea.
+
+**Primer login con Google**: crea el `Usuario` con rol `Oferente` (mismo
+default que `/auth/registro`) y un `password_hash` de una contraseña aleatoria
+que nadie conoce — esa cuenta no puede loguearse después por
+`/auth/login` con password, solo por Google. Si el mail ya existía (se había
+registrado por password), se reutiliza esa cuenta: no se duplica, y sigue
+pudiendo loguearse por los dos caminos.
+
+**CA02 — vista de Perfil**: `GET /api/v1/auth/me`, con el JWT del paso
+anterior, devuelve `{id_usuario, email, nombre, rol}`. `nombre` sale del
+perfil de Google y se actualiza en cada login; queda `null` para las cuentas
+que solo usaron email/password. **No** expone nada del perfil de Oferente
+(categoría, fotos, matrícula): esa es otra HU, tal como aclara el propio CA02.
+
+**Columna nueva**: `USUARIO.nombre` (`VARCHAR(150)`, nullable), migración
+`db8e00ae811e` ya aplicada en Supabase.
+
+**Configuración nueva** (ver `.env.example` para el detalle y los pasos en el
+dashboard de Auth0): `AUTH0_DOMAIN`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`,
+`AUTH0_CALLBACK_URL`, `GOOGLE_LOGIN_RUTA_EXITO`, `GOOGLE_LOGIN_RUTA_ERROR`. Sin
+las tres primeras, `/auth/google/login` responde 503 y el login por
+email/password sigue igual — no hay forma de que la ausencia de Auth0 tumbe el
+resto del backend.
 
 ---
 
@@ -464,6 +512,17 @@ y la base coinciden.
 ---
 
 ## Endpoints
+
+### HU-03
+
+| Método y ruta | Descripción | Auth |
+|---|---|---|
+| `POST /api/v1/auth/registro` | Sin cambios | Pública |
+| `POST /api/v1/auth/login` | Sin cambios | Pública |
+| `POST /api/v1/auth/logout` | Sin cambios | Cualquier rol |
+| `GET /api/v1/auth/me` | **Nuevo** (CA02): perfil del usuario autenticado, `{id_usuario, email, nombre, rol}` | Cualquier rol |
+| `GET /api/v1/auth/google/login` | **Nuevo** (CA01): redirige a Auth0 | Pública |
+| `GET /api/v1/auth/google/callback` | **Nuevo** (CA02/CA03): vuelta de Auth0, redirige al frontend con el token o con el error | Pública |
 
 ### HU-01
 

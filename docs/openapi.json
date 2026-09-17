@@ -131,6 +131,145 @@
         ]
       }
     },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Perfil del usuario autenticado (nombre y correo)",
+        "description": "HU-03 / CA02 — Lo que muestra la vista \"Perfil del usuario\" al volver del\nlogin: nombre, correo y nada más. El perfil de Oferente (categoría, fotos,\netc.) es otra HU y se consulta aparte con `GET /oferentes/{id}`.",
+        "operationId": "perfil_actual_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerfilOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/google/login": {
+      "get": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Inicia el login con Google (CA01): redirige a Auth0",
+        "description": "El frontend manda al usuario acá cuando presiona \"Iniciar sesión con\nGoogle\". El `state` viaja en una cookie de corta duración, de un solo uso,\npara que `/google/callback` pueda confirmar que la vuelta corresponde a\nesta ida (protección CSRF del flujo OAuth) — no reemplaza ninguna sesión:\nel login sigue siendo stateless.",
+        "operationId": "iniciar_login_google_api_v1_auth_google_login_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "302": {
+            "description": "Redirige a la pantalla de Google/Auth0"
+          },
+          "503": {
+            "description": "Auth0 no está configurado en este entorno"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/google/callback": {
+      "get": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Vuelta de Auth0 tras el login con Google (CA02/CA03)",
+        "description": "CA02 — Autenticación exitosa: redirige a la vista de perfil con el JWT\npropio (mismo formato que `/login`; el resto del backend no distingue de\nqué flujo vino).\nCA03 — Autenticación fallida: redirige a la pantalla de login con\n`?error=auth_failed`, **sin** token. Cualquier falla (el usuario canceló en\nGoogle, Auth0 rechazó el intercambio, el mail no vino verificado, la cuenta\nestá suspendida) cae en esta misma rama.",
+        "operationId": "callback_login_google_api_v1_auth_google_callback_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "302": {
+            "description": "Redirige al frontend, con el token (éxito) o con ?error=auth_failed (falla)"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/oferentes": {
       "get": {
         "tags": [
@@ -2326,6 +2465,42 @@
         },
         "type": "object",
         "title": "OferenteUpdate"
+      },
+      "PerfilOut": {
+        "properties": {
+          "id_usuario": {
+            "type": "integer",
+            "title": "Id Usuario"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre",
+            "description": "Viene de Google. Vacío para cuentas que solo usaron email/password."
+          },
+          "rol": {
+            "$ref": "#/components/schemas/RolUsuario"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_usuario",
+          "email",
+          "rol"
+        ],
+        "title": "PerfilOut",
+        "description": "HU-03 / CA02: lo único que se ve al volver del login. Nada de datos del\nperfil de Oferente — esa es otra HU."
       },
       "ReemplazoResolucionIn": {
         "properties": {

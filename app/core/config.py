@@ -36,7 +36,29 @@ class Settings(BaseSettings):
     # Schema de Postgres donde viven las tablas del backend. No aplica a SQLite.
     database_schema: str = "offix"
 
+    # Auth0 (HU-03, CA01-CA04): login con Google. El tenant es del tipo
+    # "Regular Web Application" — el backend es quien intercambia el código por
+    # el token (necesita el client_secret), no el frontend. Sin estas tres
+    # variables, /auth/google/login responde 503: convive con el login por
+    # email/password, que sigue igual.
+    auth0_domain: str = ""
+    auth0_client_id: str = ""
+    auth0_client_secret: str = ""
+    # Tiene que estar cargada tal cual en Auth0 (Application > Allowed Callback
+    # URLs). Cambia entre entornos (local vs. producción).
+    auth0_callback_url: str = "http://localhost:8000/api/v1/auth/google/callback"
+
+    # A dónde redirige el backend en el frontend al terminar el flujo de Google.
+    # Éxito: {frontend_url}{ruta_exito}?token=<jwt>. Falla (CA03): sin token,
+    # con ?error=auth_failed.
+    google_login_ruta_exito: str = "/auth/callback"
+    google_login_ruta_error: str = "/login"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    @property
+    def auth0_habilitado(self) -> bool:
+        return bool(self.auth0_domain and self.auth0_client_id and self.auth0_client_secret)
 
     @property
     def cors_origins_list(self) -> list[str]:
