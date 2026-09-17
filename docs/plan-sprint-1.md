@@ -177,7 +177,7 @@ la consulta se hace contra la tabla, no leyendo el archivo en cada request.
 | Archivo | Tipo | Estado |
 |---|---|---|
 | `app/db/padrones/gasistas.md` | Gasista | **Cargado** — 68 matriculados |
-| `app/db/padrones/aire-acondicionado.md` | Aire acondicionado | ⚠ **Falta.** Ver pregunta abierta #1 |
+| `app/db/padrones/aire-acondicionado.json` | Aire acondicionado | ⚠ **Cargado parcial** (2026-09-16) — 49 de 77 matriculados. Ver pregunta abierta #1 |
 
 #### Formato del archivo
 
@@ -268,7 +268,7 @@ en el backend no existe un timeout real de 60 segundos.
 | Tipo de profesional | Matrícula trampa | Dígitos |
 |---|---|---|
 | Gasista | `9999999999` | 10 |
-| Aire acondicionado | `999999999` | 9 |
+| Aire acondicionado | `99999999` | 8 |
 
 Respetan la cantidad de dígitos que exige cada tipo, así que el botón *Confirmar*
 se habilita normalmente y el caso de prueba recorre el mismo camino que uno real.
@@ -284,7 +284,7 @@ para que no quede disponible en un entorno productivo.
 | Regla | Definición |
 |---|---|
 | Tipos válidos | `Aire acondicionado` y `Gasista`, únicamente |
-| Longitud del número | **9 dígitos** para Aire acondicionado, **10 dígitos** para Gasista |
+| Longitud del número | **8 dígitos** para Aire acondicionado (corregido — el CA01 decía 9; ver pregunta abierta #1), **10 dígitos** para Gasista |
 | Formato | Solo dígitos. Cualquier carácter alfabético se rechaza |
 | Relación con la categoría del perfil | **Independiente.** Un Profesional puede tener más de un oficio, así que el tipo de matrícula no tiene que coincidir con su categoría |
 | Identidad | Se valida **el número Y el nombre**: el número tiene que existir en el padrón y el nombre del perfil tiene que coincidir en al menos un **90 %** con el del padrón. Ver "Coincidencia de nombre" |
@@ -635,8 +635,10 @@ Se ajustan los existentes y se agregan:
   apropiación de matrículas ajenas, pero un apellido compuesto o un error de carga
   en el perfil puede dejar afuera a una persona legítima. El override manual del
   Administrador queda como vía de escape.
-- **Falta el padrón de Aire acondicionado**, así que la mitad de HU-02 no es
-  demostrable todavía.
+- **El padrón de Aire acondicionado llegó parcial** (49 de 77 matriculados) y
+  **sin categoría ni vencimiento**: se cargó con un placeholder documentado
+  (`Sin categorizar`, vencimiento `31/12/2099`) hasta que llegue el dato real.
+  Ver pregunta abierta #1.
 - **El renombre de `Aprobada` a `Aceptada` toca el DER.** Está decidido, pero
   depende del aval de la PM; si no llega a tiempo, el código queda con un
   vocabulario y QA con otro.
@@ -729,14 +731,27 @@ profesor.**
 
 ## Preguntas abiertas
 
-1. **🔴 Padrón de Aire acondicionado.** Sigue sin llegar. La Fase 4 se
-   implementó y quedó demostrable **solo con Gasista**
-   (`app/db/padrones/gasistas.md`, 68 matriculados de 10 dígitos); el tipo
-   `Aire acondicionado` ya está soportado en el código (formato de 9 dígitos,
-   matrícula trampa `999999999`), así que cuando llegue el archivo real se
-   carga desde `app/db/seed.py` sin tocar nada más. **Cuando aparezca, hay que
-   confirmar que sus matrículas sean de 9 dígitos**: si también son de 10, el
-   CA01 está mal escrito.
+1. **🟡 Padrón de Aire acondicionado — llegó parcial (2026-09-16).** Llegó como
+   `app/db/padrones/aire-acondicionado.json` (export estructurado, no un `.md`
+   como el de Gasistas) y trae **tres problemas** frente a lo que asumía el plan:
+   - **8 dígitos, no 9.** El CA01 y el código (`DIGITOS_POR_TIPO`,
+     la matrícula trampa) asumían 9; se corrigieron los dos a 8, que es lo que
+     tienen las 49 filas reales del export. **Falta corregir el CA01** en la
+     documentación de HU-02.
+   - **Es parcial: 50 de 77 filas** (`"total": 77, "limit": 50, "page": 0` en
+     el propio JSON) — falta la página 2 o el export sin paginar. Se cargó
+     igual lo que hay (decisión del equipo), descartando una fila de prueba
+     con una matrícula de 9 dígitos ("Alias, Rado Federico" repetido con
+     `111111111`, que no es un matriculado real).
+   - **Sin categoría ni vencimiento.** El export no trae esos dos campos (el
+     de Gasistas sí). Se cargó con un placeholder explícito
+     (`app/services/padrones.py`: `PLACEHOLDER_CATEGORIA = "Sin categorizar"`,
+     `PLACEHOLDER_VENCIMIENTO = 31/12/2099`) — con esto cargado, **ningún**
+     matriculado de Aire acondicionado puede dar resultado `Vencida` hasta que
+     llegue el dato real y se reemplace.
+
+   Con esto, HU-02 ya es demostrable para los dos tipos de profesional, con la
+   salvedad de que Aire acondicionado tiene datos incompletos.
 2. **Textos de notificación sin CA — resuelto en parte.** Se decidió usar solo
    textos de los criterios de aceptación: matrícula **vencida** y **nombre que no
    coincide** muestran el del CA04. Siguen abiertos los dos que **ningún CA puede

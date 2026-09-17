@@ -190,7 +190,7 @@ def test_historial_incluye_todos_los_intentos_incluidos_los_fallidos(client, db_
 
 def test_un_oferente_puede_fidelizar_dos_oficios_distintos(client, db_session):
     crear_fila_padron(db_session, tipo="Gasista", numero="1000008919", nombre="ALESSI MARIA CLARA")
-    crear_fila_padron(db_session, tipo="Aire acondicionado", numero="100000891", nombre="ALESSI MARIA CLARA")
+    crear_fila_padron(db_session, tipo="Aire acondicionado", numero="10000089", nombre="ALESSI MARIA CLARA")
     token, _ = crear_oferente(client, db_session, "gasista12@test.com", "Maria Clara", "Alessi", "20-11111111-12")
 
     r1 = client.post(
@@ -200,7 +200,7 @@ def test_un_oferente_puede_fidelizar_dos_oficios_distintos(client, db_session):
     )
     r2 = client.post(
         "/api/v1/oferentes/me/matriculas/validaciones",
-        json={"tipo_profesional": "Aire acondicionado", "numero_matricula": "100000891"},
+        json={"tipo_profesional": "Aire acondicionado", "numero_matricula": "10000089"},
         headers=auth(token),
     )
     assert r1.json()["resultado"] == "Validada"

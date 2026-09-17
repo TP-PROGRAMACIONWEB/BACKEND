@@ -23,12 +23,14 @@ from app.models.usuario import RolUsuario, Usuario
 
 DIGITOS_POR_TIPO = {
     "Gasista": 10,
-    "Aire acondicionado": 9,
+    # El CA01 decía 9; el padrón real (llegado 2026-09-16) trae matrículas de
+    # 8 dígitos. Corregido acá y en el propio CA — ver plan, pregunta abierta #1.
+    "Aire acondicionado": 8,
 }
 
 MATRICULAS_TRAMPA = {
     "Gasista": "9999999999",
-    "Aire acondicionado": "999999999",
+    "Aire acondicionado": "99999999",
 }
 
 UMBRAL_COINCIDENCIA_NOMBRE = 0.90

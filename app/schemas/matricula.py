@@ -16,7 +16,7 @@ class ValidacionMatriculaIn(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": {"tipo_profesional": "Gasista", "numero_matricula": "1000008919"}})
 
     tipo_profesional: TipoProfesionalLiteral
-    numero_matricula: str = Field(description="Solo dígitos. 10 para Gasista, 9 para Aire acondicionado.")
+    numero_matricula: str = Field(description="Solo dígitos. 10 para Gasista, 8 para Aire acondicionado.")
 
     @model_validator(mode="after")
     def validar_numero(self):

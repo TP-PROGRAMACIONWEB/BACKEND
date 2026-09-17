@@ -51,7 +51,7 @@ def crear_validacion(
     `resultado` con su mensaje; el frontend lo renderiza.
 
     **Para QA (CA03):** el resultado `Timeout` se obtiene con la matrícula
-    trampa —`9999999999` para Gasista, `999999999` para Aire acondicionado—,
+    trampa —`9999999999` para Gasista, `99999999` para Aire acondicionado—,
     que responde al instante, sin esperar ninguna demora real.
     """
     oferente = _oferente_actual(db, usuario)

@@ -2,7 +2,8 @@
 de oficios, Oferentes de ejemplo (con su Usuario asociado), solicitudes de reseña
 ya generadas —una por canal— y una notificación pendiente en la bandeja, para
 poder mostrar la campana con contador sin generar una reseña primero. También
-carga el padrón de matriculados de Gasista (HU-02).
+carga los padrones de matriculados de HU-02 (Gasista completo; Aire
+acondicionado parcial — ver PADRONES más abajo).
 Idempotente: se puede correr varias veces sin duplicar datos.
 
 Uso: python -m app.db.seed
@@ -23,12 +24,20 @@ from app.models.resena import EstadoResena, Resena
 from app.models.solicitud_resena import EstadoSolicitud, OrigenSolicitud, SolicitudResena
 from app.models.usuario import RolUsuario, Usuario
 from app.services.notificaciones import crear_notificacion_resena_nueva
-from app.services.padrones import parsear_padron_md
+from app.services.padrones import parsear_padron_json, parsear_padron_md
 
-PADRONES = {
-    TipoProfesionalMatricula.GASISTA: Path(__file__).parent / "padrones" / "gasistas.md",
-}
+PADRONES_DIR = Path(__file__).parent / "padrones"
+
+# (tipo, archivo, parser). Gasistas: 68 matriculados, padrón completo.
+# Aire acondicionado: 49 matriculados válidos (50 filas del export menos una
+# de prueba), y es **parcial** — el export trae 50 de 77 totales, falta la
+# página 2. Ver docs/plan-sprint-1.md, pregunta abierta #1.
+PADRONES = [
+    (TipoProfesionalMatricula.GASISTA, PADRONES_DIR / "gasistas.md", parsear_padron_md),
+    (TipoProfesionalMatricula.AIRE_ACONDICIONADO, PADRONES_DIR / "aire-acondicionado.json", parsear_padron_json),
+]
 MATRICULA_DEMO_GASISTA = "1000008919"  # ALESSI MARIA CLARA, la primera fila del padrón real.
+MATRICULA_DEMO_AIRE_ACONDICIONADO = "28408435"  # ABATEDAGA MARTIN, la primera fila del export.
 
 PASSWORD_SEED = "Offix2026!"
 
@@ -74,8 +83,11 @@ OFERENTES_DEMO = [
     ),
     dict(
         email="lucia.rodriguez@offix.example.com",
-        nombre="Lucía",
-        apellido="Rodríguez",
+        # Nombre real del padrón de Aire acondicionado (matrícula 28408435),
+        # igual que se hizo con la Gasista de demo: con un nombre inventado el
+        # match contra el padrón la rechaza.
+        nombre="Martin",
+        apellido="Abatedaga",
         categoria="Técnico en Aire Acondicionado",
         dni_cuit="27-26777888-9",
         telefono="+54 3564 400444",
@@ -123,7 +135,13 @@ def get_or_create_categoria(db, nombre: str, descripcion: str) -> Categoria:
 def get_or_create_oferente(db, categorias: dict[str, Categoria], datos: dict) -> Oferente:
     usuario = db.query(Usuario).filter(Usuario.email == datos["email"]).first()
     if usuario and usuario.oferente:
-        return usuario.oferente
+        # nombre/apellido sí se sincronizan en cada corrida: son los que
+        # habilitan el match contra el padrón (HU-02), y quedaron mal una vez
+        # en la nube porque acá no se actualizaban en un Oferente ya creado.
+        oferente = usuario.oferente
+        oferente.nombre = datos["nombre"]
+        oferente.apellido = datos["apellido"]
+        return oferente
 
     if not usuario:
         usuario = Usuario(
@@ -150,13 +168,13 @@ def get_or_create_oferente(db, categorias: dict[str, Categoria], datos: dict) ->
 
 
 def get_or_create_padron(db) -> int:
-    """Carga el padrón de Gasistas a la base si todavía no está. Devuelve la
-    cantidad de filas cargadas (0 si ya estaba)."""
+    """Carga los padrones de matriculados a la base si todavía no están.
+    Devuelve la cantidad de filas cargadas (0 si ya estaban)."""
     cargadas = 0
-    for tipo, path in PADRONES.items():
+    for tipo, path, parser in PADRONES:
         if db.query(PadronMatricula).filter(PadronMatricula.tipo_profesional == tipo).first():
             continue
-        for fila in parsear_padron_md(path):
+        for fila in parser(path):
             db.add(
                 PadronMatricula(
                     tipo_profesional=tipo,
@@ -314,10 +332,15 @@ def run():
         print(f"  - canal WhatsApp: {CODIGO_SOLICITUD_WHATSAPP}")
         print(f"{oferentes[0].nombre} {oferentes[0].apellido} tiene una reseña aceptada de ejemplo en su perfil.")
         print(f"{oferentes[1].nombre} {oferentes[1].apellido} tiene 1 notificación pendiente en la campana.")
-        print(f"Padrón de Gasistas: {padron_cargado} matrículas cargadas (0 = ya estaba cargado).")
+        print(f"Padrones cargados: {padron_cargado} matrículas nuevas (0 = ya estaban cargadas).")
         print(
-            f"Para probar HU-02: logueate como {oferentes[1].nombre} {oferentes[1].apellido} y validá "
+            f"  - Gasista (completo, 68 matriculados): logueate como {oferentes[1].nombre} {oferentes[1].apellido} y validá "
             f'{{"tipo_profesional": "Gasista", "numero_matricula": "{MATRICULA_DEMO_GASISTA}"}}'
+        )
+        print(
+            f"  - Aire acondicionado (PARCIAL, 49 de 77 — falta la página 2 del export): logueate como "
+            f"{oferentes[3].nombre} {oferentes[3].apellido} y validá "
+            f'{{"tipo_profesional": "Aire acondicionado", "numero_matricula": "{MATRICULA_DEMO_AIRE_ACONDICIONADO}"}}'
         )
     except Exception:
         db.rollback()
