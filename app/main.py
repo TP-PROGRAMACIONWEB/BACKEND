@@ -53,6 +53,7 @@ app = FastAPI(
     openapi_tags=tags_metadata,
     contact={"name": "Equipo Offix - UTN FRSF"},
     servers=[
+        {"url": "https://backend-offix3.vercel.app", "description": "Producción (Vercel + Supabase)"},
         {"url": "http://localhost:8000", "description": "Entorno local (iniciar_backend.bat)"},
     ],
 )
