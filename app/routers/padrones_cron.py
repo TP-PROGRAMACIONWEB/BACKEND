@@ -14,6 +14,7 @@ Fuentes: local | gasnea | cacaav | camtrec | ecogas | todas
 """
 
 import secrets
+import traceback
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -21,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.database import get_db
 from app.services import padrones_sync
-from app.services.scrapers import cacaav, camtrec, ecogas, gasnea
+from app.services.scrapers import cacaav, camtrec, gasnea
 
 router = APIRouter(prefix="/api/v1/cron/padrones", tags=["Cron Padrones"])
 
@@ -38,35 +39,50 @@ def sync(
     secret: str = Query(..., description="Igual a CRON_SECRET en Vercel"),
     fuente: str = Query("local", description="local|gasnea|cacaav|camtrec|ecogas|todas"),
     dry_run: bool = Query(True, description="True = solo reporte, no escribe"),
-    paginas: int = Query(2, ge=1, le=5, description="Páginas por scraper web (límite serverless)"),
+    paginas: int = Query(1, ge=1, le=5, description="Páginas por scraper web (límite serverless)"),
     db: Session = Depends(get_db),
 ):
     _check_secret(secret)
     filas = []
     detalle: dict = {}
+    # Cada fuente aislada: si una cae, las demás igual se procesan.
+    # En serverless no hay pausas de cortesía (timeout de 10s en Hobby).
     try:
         if fuente in ("local", "todas"):
+            n_antes = len(filas)
             filas += padrones_sync.filas_desde_archivos_locales()
-            detalle["local"] = len(filas)
+            detalle["local"] = {"filas": len(filas) - n_antes}
+    except Exception as ex:
+        detalle["local"] = {"error": f"{type(ex).__name__}: {ex}"}
+    try:
         if fuente in ("gasnea", "todas"):
             g, info = gasnea.scrapear()
-            filas += [f for f in g if f.numero_matricula.isdigit()]
-            detalle["gasnea"] = info
-        if fuente in ("cacaav", "todas"):
-            c, info = cacaav.scrapear(paginas=paginas)
-            detalle["cacaav"] = info  # observadas (sin DNI en vista)
-        if fuente in ("camtrec", "todas"):
-            m, info = camtrec.scrapear(paginas=paginas)
-            filas += m
-            detalle["camtrec"] = info
-        if fuente in ("ecogas",):
-            e, info = ecogas.scrapear()
-            filas += e
-            detalle["ecogas"] = info
+            validas = [f for f in g if f.numero_matricula.isdigit()]
+            filas += validas
+            detalle["gasnea"] = {**info, "validas": len(validas)}
     except Exception as ex:
-        raise HTTPException(status_code=502, detail=f"Falla al extraer: {ex}")
-    reporte = padrones_sync.sincronizar(db, filas, origen=f"cron:{fuente}", dry_run=dry_run)
-    reporte["detalle"] = {k: (v if isinstance(v, dict) else v) for k, v in detalle.items()}
+        detalle["gasnea"] = {"error": f"{type(ex).__name__}: {ex}"}
+    try:
+        if fuente in ("cacaav", "todas"):
+            c, info = cacaav.scrapear(paginas=paginas, cortesia_seg=0)
+            detalle["cacaav"] = info  # observadas (sin DNI en vista)
+    except Exception as ex:
+        detalle["cacaav"] = {"error": f"{type(ex).__name__}: {ex}"}
+    try:
+        if fuente in ("camtrec", "todas"):
+            m, info = camtrec.scrapear(paginas=paginas, cortesia_seg=0)
+            filas += m
+            detalle["camtrec"] = {**info, "sumadas": len(m)}
+    except Exception as ex:
+        detalle["camtrec"] = {"error": f"{type(ex).__name__}: {ex}"}
+    if fuente in ("ecogas",):
+        # Ecogas necesita navegador (Playwright): no corre en serverless.
+        detalle["ecogas"] = {"error": "Ecogas requiere Playwright: correr con CLI local (python -m app.scripts.actualizar_padron --fuente ecogas)"}
+    try:
+        reporte = padrones_sync.sincronizar(db, filas, origen=f"cron:{fuente}", dry_run=dry_run)
+    except Exception:
+        raise HTTPException(status_code=500, detail=f"Falla al guardar en BD: {traceback.format_exc(limit=3)}")
+    reporte["detalle"] = detalle
     return reporte
 
 
