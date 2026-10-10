@@ -13,3 +13,5 @@ python-multipart==0.0.20
 alembic==1.14.0
 pytest==8.3.4
 httpx==0.28.1
+beautifulsoup4==4.12.3
+pypdf==4.3.1

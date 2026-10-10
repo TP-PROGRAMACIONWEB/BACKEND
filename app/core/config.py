@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     google_login_ruta_exito: str = "/auth/callback"
     google_login_ruta_error: str = "/login"
 
+    # Cron-job.org: secreto compartido para GET /api/v1/cron/padrones/sync.
+    # cron-job.org no puede mandar JWT, así que usa ?secret= igual a esto.
+    cron_secret: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @property

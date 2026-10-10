@@ -14,7 +14,7 @@ from app.models import (  # noqa: F401
     solicitud_resena,
     usuario,
 )
-from app.routers import admin, auth, categorias, matriculas, notificaciones, oferentes, resenas
+from app.routers import admin, auth, categorias, matriculas, notificaciones, oferentes, padrones_cron, resenas
 
 tags_metadata = [
     {"name": "Autenticación", "description": "Registro, inicio y cierre de sesión de Oferentes (RF1, RF4, HU-03)."},
@@ -73,6 +73,7 @@ app.include_router(resenas.router)
 app.include_router(notificaciones.router)
 app.include_router(matriculas.router)
 app.include_router(admin.router)
+app.include_router(padrones_cron.router)
 
 
 @app.on_event("startup")

@@ -2,6 +2,10 @@ venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+.env
+*.db
+.vercel
+docs/padron_sync_logs/
 
 # Salida de la herramienta graphify (grafo de conocimiento generado)
 graphify-out/
