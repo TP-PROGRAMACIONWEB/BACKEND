@@ -318,10 +318,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Palabra clave: nombre o apellido",
+              "description": "Palabra clave: parte del nombre",
               "title": "Q"
             },
-            "description": "Palabra clave: nombre o apellido"
+            "description": "Palabra clave: parte del nombre"
           },
           {
             "name": "categoria_id",
@@ -1993,6 +1993,183 @@
         }
       }
     },
+    "/api/v1/cron/padrones/sync": {
+      "post": {
+        "tags": [
+          "Cron Padrones"
+        ],
+        "summary": "Sync de padrones para cron-job.org",
+        "operationId": "sync_api_v1_cron_padrones_sync_post",
+        "parameters": [
+          {
+            "name": "secret",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Igual a CRON_SECRET en Vercel",
+              "title": "Secret"
+            },
+            "description": "Igual a CRON_SECRET en Vercel"
+          },
+          {
+            "name": "fuente",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "local|gasnea|cacaav|camtrec|ecogas|todas",
+              "default": "local",
+              "title": "Fuente"
+            },
+            "description": "local|gasnea|cacaav|camtrec|ecogas|todas"
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "True = solo reporte, no escribe",
+              "default": true,
+              "title": "Dry Run"
+            },
+            "description": "True = solo reporte, no escribe"
+          },
+          {
+            "name": "paginas",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5,
+              "minimum": 1,
+              "description": "Páginas por scraper web (límite serverless)",
+              "default": 1,
+              "title": "Paginas"
+            },
+            "description": "Páginas por scraper web (límite serverless)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Cron Padrones"
+        ],
+        "summary": "Sync de padrones para cron-job.org",
+        "operationId": "sync_api_v1_cron_padrones_sync_get",
+        "parameters": [
+          {
+            "name": "secret",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Igual a CRON_SECRET en Vercel",
+              "title": "Secret"
+            },
+            "description": "Igual a CRON_SECRET en Vercel"
+          },
+          {
+            "name": "fuente",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "local|gasnea|cacaav|camtrec|ecogas|todas",
+              "default": "local",
+              "title": "Fuente"
+            },
+            "description": "local|gasnea|cacaav|camtrec|ecogas|todas"
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "True = solo reporte, no escribe",
+              "default": true,
+              "title": "Dry Run"
+            },
+            "description": "True = solo reporte, no escribe"
+          },
+          {
+            "name": "paginas",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5,
+              "minimum": 1,
+              "description": "Páginas por scraper web (límite serverless)",
+              "default": 1,
+              "title": "Paginas"
+            },
+            "description": "Páginas por scraper web (límite serverless)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cron/padrones/health": {
+      "get": {
+        "tags": [
+          "Cron Padrones"
+        ],
+        "summary": "Chequeo cron",
+        "operationId": "cron_health_api_v1_cron_padrones_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -2711,7 +2888,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 100,
+                "maxLength": 150,
                 "minLength": 2
               },
               {
@@ -2719,19 +2896,6 @@
               }
             ],
             "title": "Nombre"
-          },
-          "apellido": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 100,
-                "minLength": 2
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Apellido"
           },
           "telefono": {
             "anyOf": [
@@ -2907,10 +3071,6 @@
           "nombre": {
             "type": "string",
             "title": "Nombre"
-          },
-          "apellido": {
-            "type": "string",
-            "title": "Apellido"
           },
           "categoria_id": {
             "anyOf": [
@@ -3118,7 +3278,6 @@
         "required": [
           "id_oferente",
           "nombre",
-          "apellido",
           "telefono",
           "email",
           "disponible_emergencia",
@@ -3141,10 +3300,6 @@
           "nombre": {
             "type": "string",
             "title": "Nombre"
-          },
-          "apellido": {
-            "type": "string",
-            "title": "Apellido"
           },
           "categoria_id": {
             "anyOf": [
@@ -3339,7 +3494,6 @@
         "required": [
           "id_oferente",
           "nombre",
-          "apellido",
           "telefono",
           "email",
           "disponible_emergencia",
@@ -3354,16 +3508,10 @@
         "properties": {
           "nombre": {
             "type": "string",
-            "maxLength": 100,
+            "maxLength": 150,
             "minLength": 2,
             "title": "Nombre",
-            "description": "Nombre o razón social."
-          },
-          "apellido": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 2,
-            "title": "Apellido"
+            "description": "Nombre y apellido, o razón social. Un solo campo."
           },
           "telefono": {
             "type": "string",
@@ -3445,7 +3593,6 @@
         "type": "object",
         "required": [
           "nombre",
-          "apellido",
           "telefono",
           "categoria_id",
           "dias_atencion",
@@ -3456,7 +3603,6 @@
         "title": "OferenteRegistro",
         "description": "Body de `POST /api/v1/oferentes` (HU-04, CA02 y CA03).",
         "example": {
-          "apellido": "Ludueña",
           "categoria_id": 1,
           "dias_atencion": [
             1,
@@ -3472,7 +3618,7 @@
           "hora_fin_atencion": "18:00",
           "hora_inicio_atencion": "08:00",
           "info_guardia": "Atiendo urgencias de lunes a sábado hasta las 22 h.",
-          "nombre": "Serena",
+          "nombre": "Serena Ludueña",
           "telefono": "3564-400111"
         }
       },
