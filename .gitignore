@@ -9,3 +9,5 @@ docs/padron_sync_logs/
 
 # Salida de la herramienta graphify (grafo de conocimiento generado)
 graphify-out/
+.env
+offix_dev.db
