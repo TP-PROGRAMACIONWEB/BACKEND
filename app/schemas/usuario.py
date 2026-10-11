@@ -41,6 +41,10 @@ class PerfilOut(BaseModel):
     email: EmailStr
     nombre: str | None = Field(default=None, description="Viene de Google. Vacío para cuentas que solo usaron email/password.")
     rol: RolUsuario
+    requiere_registro: bool = Field(
+        default=False,
+        description="true si es Oferente y todavía no completó el formulario de Profesional. El frontend lo manda a /registro.",
+    )
 
 
 class Token(BaseModel):

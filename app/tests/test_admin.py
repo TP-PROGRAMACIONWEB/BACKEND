@@ -26,7 +26,7 @@ def test_admin_listar_usuarios_ok(client, db_session):
 
 def test_admin_verificacion_manual_ok(client, db_session):
     token_admin = _login_admin(client, db_session)
-    _, oferente_id = crear_oferente_completo(client, db_session, email="verificar@test.com", dni_cuit="20-20000001-1")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="verificar@test.com", dni_cuit="20-20000001-4")
 
     response = client.patch(
         f"/api/v1/admin/oferentes/{oferente_id}/verificacion",
