@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.deps import get_current_user
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.database import get_db
+from app.models.oferente import Oferente
 from app.models.usuario import EstadoCuenta, RolUsuario, Usuario
 from app.schemas.usuario import PerfilOut, Token, UsuarioCreate, UsuarioLogin, UsuarioOut
 from app.services.auth0 import Auth0Error, Auth0Service, get_auth0_service
@@ -85,14 +86,20 @@ def logout(usuario: Usuario = Depends(get_current_user)):
 @router.get(
     "/me",
     response_model=PerfilOut,
-    summary="Perfil del usuario autenticado (nombre y correo)",
+    summary="Perfil del usuario autenticado (nombre, correo y si falta el registro)",
     responses={401: {"description": "Falta token o es inválido"}},
 )
-def perfil_actual(usuario: Usuario = Depends(get_current_user)):
+def perfil_actual(usuario: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
     """HU-03 / CA02 — Lo que muestra la vista "Perfil del usuario" al volver del
-    login: nombre, correo y nada más. El perfil de Oferente (categoría, fotos,
-    etc.) es otra HU y se consulta aparte con `GET /oferentes/{id}`."""
-    return usuario
+    login. HU-04 agrega `requiere_registro`: un Oferente sin fila de Profesional
+    tiene que completar el formulario antes de navegar al resto de la app (CA01)."""
+    return PerfilOut(
+        id_usuario=usuario.id_usuario,
+        email=usuario.email,
+        nombre=usuario.nombre,
+        rol=usuario.rol,
+        requiere_registro=usuario.rol == RolUsuario.OFERENTE and db.get(Oferente, usuario.id_usuario) is None,
+    )
 
 
 @router.get(

@@ -170,7 +170,7 @@ def validar_matricula(db: Session, oferente: Oferente, tipo_profesional: str, nu
         )
         if not padron:
             resultado = ResultadoValidacion.NO_ENCONTRADA
-        elif not comparar_nombres(f"{oferente.nombre} {oferente.apellido}", padron.nombre_matriculado):
+        elif not comparar_nombres(oferente.nombre, padron.nombre_matriculado):
             resultado = ResultadoValidacion.NOMBRE_NO_COINCIDE
         elif padron.fecha_vencimiento < date.today():
             resultado = ResultadoValidacion.VENCIDA
@@ -226,7 +226,7 @@ def validar_matricula(db: Session, oferente: Oferente, tipo_profesional: str, nu
             .filter(Matricula.oferente_id == oferente.id_oferente, Matricula.tipo_profesional == tipo_profesional)
             .first()
         )
-        nombre_oferente = f"{oferente.nombre} {oferente.apellido}"
+        nombre_oferente = oferente.nombre
         mensaje_admin = (
             f"{nombre_oferente} solicita reemplazar su matrícula de {tipo_profesional} "
             f"({matricula_actual.numero_matricula} → {numero_matricula}). Autorizá o denegá el cambio."

@@ -1,4 +1,4 @@
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -15,6 +15,9 @@ class EstadoResena:
 
 class Resena(Base):
     __tablename__ = "resenas"
+    # Una solicitud da como mucho una reseña: si dos envíos concurrentes pasan
+    # la validación, la base rechaza el segundo INSERT (HU-01, carrera de doble envío).
+    __table_args__ = (UniqueConstraint("solicitud_id", name="uq_resena_solicitud"),)
 
     id_resena = Column(Integer, primary_key=True, index=True)
     oferente_id = Column(Integer, ForeignKey("oferentes.id_oferente", ondelete="CASCADE"), nullable=False, index=True)

@@ -57,6 +57,20 @@ class Settings(BaseSettings):
     # Cron-job.org: secreto compartido para GET /api/v1/cron/padrones/sync.
     # cron-job.org no puede mandar JWT, así que usa ?secret= igual a esto.
     cron_secret: str = ""
+    # Supabase Storage (HU-04 T06). La service role key NUNCA llega al frontend.
+    # Sin estas dos variables, los endpoints de archivos responden 503.
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+    supabase_storage_bucket: str = "offix-media"
+    archivo_tamano_maximo_mb: int = 5
+
+    # Límites de trabajos realizados (HU-04 T06, D13). Se exponen en el catálogo.
+    trabajos_maximos: int = 5
+    fotos_por_trabajo_maximas: int = 5
+
+    # Límites anti-spam del enlace de reseña (HU-01): se cuentan en la base.
+    resena_limite_por_email_24h: int = 5
+    resena_limite_por_oferente_24h: int = 30
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
@@ -71,6 +85,14 @@ class Settings(BaseSettings):
     @property
     def frontend_url_base(self) -> str:
         return self.frontend_url.rstrip("/")
+
+    @property
+    def supabase_habilitado(self) -> bool:
+        return bool(self.supabase_url and self.supabase_service_role_key)
+
+    @property
+    def archivo_tamano_maximo_bytes(self) -> int:
+        return self.archivo_tamano_maximo_mb * 1024 * 1024
 
 
 settings = Settings()
