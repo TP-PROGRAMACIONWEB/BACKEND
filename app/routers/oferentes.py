@@ -1,105 +1,133 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_oferente_registrado
+from app.core.errores import error_negocio
 from app.db.database import get_db
 from app.models.oferente import Oferente
-from app.models.usuario import RolUsuario, Usuario
-from app.schemas.oferente import OferenteCreate, OferenteOut, OferenteUpdate
+from app.models.usuario import EstadoCuenta, Usuario
+from app.schemas.oferente import OferenteEdicion, OferentePrivadoOut, OferentePublicoOut, OferenteRegistro
+from app.services.oferentes import aplicar_edicion, armar_privada, armar_publica, crear_oferente
 
 router = APIRouter(prefix="/api/v1/oferentes", tags=["Oferentes"])
 
+RESPUESTAS_REGISTRO = {
+    401: {"description": "Falta token o es inválido"},
+    403: {"description": "El usuario es Administrador (`rol_invalido`) o no tiene perfil (`registro_incompleto`)"},
+}
 
-@router.get("", response_model=list[OferenteOut], summary="Buscar profesionales (público)")
+
+@router.get(
+    "",
+    response_model=list[OferentePublicoOut],
+    summary="Buscar profesionales (público)",
+)
 def buscar_oferentes(
-    q: str | None = Query(default=None, description="Palabra clave: nombre o apellido"),
+    q: str | None = Query(default=None, description="Palabra clave: parte del nombre"),
     categoria_id: int | None = Query(default=None, description="Filtrar por categoría/oficio"),
     db: Session = Depends(get_db),
 ):
-    """RF7/RF8 — Búsqueda y consulta pública de perfiles profesionales. No requiere login."""
-    query = db.query(Oferente)
+    """RF7/RF8 — Búsqueda pública. Excluye las cuentas suspendidas o bloqueadas
+    (observación F4 de QA): un Profesional suspendido no aparece."""
+    query = db.query(Oferente).join(Usuario, Usuario.id_usuario == Oferente.id_oferente).filter(
+        Usuario.estado_cuenta == EstadoCuenta.ACTIVA
+    )
     if categoria_id:
         query = query.filter(Oferente.categoria_id == categoria_id)
     if q:
         like = f"%{q}%"
-        query = query.filter((Oferente.nombre.ilike(like)) | (Oferente.apellido.ilike(like)))
-    return query.all()
-
-
-@router.get(
-    "/{oferente_id}",
-    response_model=OferenteOut,
-    summary="Consultar el perfil de un profesional (público)",
-    responses={404: {"description": "Oferente no encontrado"}},
-)
-def obtener_oferente(oferente_id: int, db: Session = Depends(get_db)):
-    """RF7 — Consulta pública de perfil profesional. No requiere login."""
-    oferente = db.get(Oferente, oferente_id)
-    if not oferente:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Oferente no encontrado")
-    return oferente
+        query = query.filter(Oferente.nombre.ilike(like))
+    return [armar_publica(db, oferente) for oferente in query.all()]
 
 
 @router.post(
     "",
-    response_model=OferenteOut,
+    response_model=OferentePrivadoOut,
     status_code=status.HTTP_201_CREATED,
-    summary="Crear el perfil profesional del usuario autenticado",
+    summary="Confirmar el registro de Profesional (CA02/CA03)",
     responses={
-        401: {"description": "Falta token o es inválido"},
-        403: {"description": "El usuario autenticado no tiene rol Oferente"},
-        409: {"description": "El usuario ya tiene perfil, o el DNI/CUIT ya está registrado"},
-        422: {"description": "Campo obligatorio faltante o DNI/CUIT/teléfono con formato inválido"},
+        **RESPUESTAS_REGISTRO,
+        409: {"description": "Ya completó el registro (`perfil_existente`) o el DNI/CUIT ya existe (`dni_cuit_duplicado`)"},
+        422: {"description": "Errores de validación. `errores[]` trae todos los campos a corregir"},
     },
 )
 def crear_perfil_oferente(
-    payload: OferenteCreate,
+    payload: OferenteRegistro,
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(get_current_user),
 ):
-    """RF2/HU-02 — Creación del perfil profesional del oferente. El
-    `id_oferente` resultante es siempre igual al `id_usuario` del usuario
-    autenticado (comparten clave primaria)."""
-    if usuario.rol != RolUsuario.OFERENTE:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo los usuarios con rol Oferente pueden crear un perfil")
-    if usuario.oferente:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El usuario ya tiene un perfil de oferente")
-    if db.query(Oferente).filter(Oferente.dni_cuit == payload.dni_cuit).first():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El DNI/CUIT ya está registrado")
+    """HU-04 — Crea el perfil del Oferente y sus días de atención en una sola
+    transacción. Si el formulario tiene errores, responde 422 con **todos** los
+    campos a la vez (CA02). Si abandonan el formulario, no se persiste nada (CA06)."""
+    oferente = crear_oferente(db, usuario, payload)
+    return armar_privada(db, oferente)
 
-    oferente = Oferente(id_oferente=usuario.id_usuario, **payload.model_dump())
-    db.add(oferente)
-    db.commit()
-    db.refresh(oferente)
-    return oferente
+
+@router.get(
+    "/me",
+    response_model=OferentePrivadoOut,
+    summary="Mi perfil profesional completo",
+    responses=RESPUESTAS_REGISTRO,
+)
+def obtener_mi_perfil(oferente: Oferente = Depends(get_oferente_registrado), db: Session = Depends(get_db)):
+    """HU-04 CA04 — Perfil del dueño: incluye DNI/CUIT, que nadie más ve (D7)."""
+    return armar_privada(db, oferente)
+
+
+@router.put(
+    "/me",
+    response_model=OferentePrivadoOut,
+    summary="Editar mi perfil profesional (sin DNI/CUIT ni correo)",
+    responses={
+        **RESPUESTAS_REGISTRO,
+        409: {"description": "Cambio de nombre con una matrícula fidelizada (`nombre_bloqueado_por_matricula`)"},
+        422: {"description": "Errores de validación, o un campo que no se puede editar (dni_cuit)"},
+    },
+)
+def actualizar_mi_perfil(
+    payload: OferenteEdicion,
+    oferente: Oferente = Depends(get_oferente_registrado),
+    db: Session = Depends(get_db),
+):
+    """HU-04 (D18) — Todos los campos son opcionales. El DNI/CUIT y el correo no
+    se cambian: se rechazan o se ignoran."""
+    actualizado = aplicar_edicion(db, oferente, payload)
+    return armar_privada(db, actualizado)
+
+
+@router.get(
+    "/{oferente_id}",
+    response_model=OferentePublicoOut,
+    summary="Consultar el perfil de un profesional (público)",
+    responses={404: {"description": "Oferente no encontrado"}},
+)
+def obtener_oferente(oferente_id: int, db: Session = Depends(get_db)):
+    """RF7 — Perfil público. No devuelve DNI/CUIT, estado de verificación ni
+    rechazos acumulados."""
+    oferente = db.get(Oferente, oferente_id)
+    if not oferente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Oferente no encontrado")
+    return armar_publica(db, oferente)
 
 
 @router.put(
     "/{oferente_id}",
-    response_model=OferenteOut,
-    summary="Editar el perfil profesional propio",
+    response_model=OferentePrivadoOut,
+    summary="Editar el perfil propio (alias de compatibilidad de PUT /me)",
     responses={
-        401: {"description": "Falta token o es inválido"},
-        403: {"description": "El usuario autenticado no es el dueño del perfil"},
-        404: {"description": "Oferente no encontrado"},
+        **RESPUESTAS_REGISTRO,
+        403: {"description": "El perfil no es el del usuario autenticado"},
     },
 )
 def actualizar_perfil_oferente(
     oferente_id: int,
-    payload: OferenteUpdate,
+    payload: OferenteEdicion,
+    oferente: Oferente = Depends(get_oferente_registrado),
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(get_current_user),
 ):
-    """RF2 — Edición del perfil profesional. Solo el dueño puede editarlo."""
-    oferente = db.get(Oferente, oferente_id)
-    if not oferente:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Oferente no encontrado")
-    if oferente.id_oferente != usuario.id_usuario:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado")
-
-    for field, value in payload.model_dump(exclude_unset=True).items():
-        setattr(oferente, field, value)
-
-    db.commit()
-    db.refresh(oferente)
-    return oferente
+    """Se mantiene por compatibilidad con los llamados de Sprint 1. Delega en la
+    misma lógica que `PUT /oferentes/me` y solo acepta el propio `id`."""
+    if oferente.id_oferente != oferente_id:
+        raise error_negocio(403, "no_autorizado", "No autorizado")
+    actualizado = aplicar_edicion(db, oferente, payload)
+    return armar_privada(db, actualizado)

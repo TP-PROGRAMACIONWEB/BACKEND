@@ -18,8 +18,7 @@ class NotificacionOut(BaseModel):
             "example": {
                 "id_notificacion": 1,
                 "tipo": "Resena_Nueva",
-                "mensaje": "Juan Cliente (3516924551 / juan@example.com) dejó una reseña sobre tu trabajo. "
-                "Revisá los datos de contacto y decidí si la aceptás.",
+                "mensaje": "Recibiste una nueva reseña de un cliente 3516924551 a través de Offix.",
                 "requiere_accion": True,
                 "estado": "Pendiente",
                 "resena_id": 7,

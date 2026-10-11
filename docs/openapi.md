@@ -36,6 +36,34 @@ python -m app.scripts.export_openapi
 
 (requiere el entorno virtual activado — `venv\Scripts\activate.bat` — no hace falta que el servidor esté corriendo).
 
+## Sprint 2 — errores y endpoints nuevos (ver `docs/plan-sprint-2.md`)
+
+**Errores de validación (422)** traen dos listas. `detail` es lo que devuelve FastAPI, como antes. `errores` es lo que pinta el formulario, con un `campo` y un `codigo` por cada problema, y **todos juntos**:
+
+```json
+{
+  "detail": [...],
+  "errores": [{"campo": "telefono", "codigo": "telefono_invalido"}, {"campo": "dias_atencion", "codigo": "dias_requeridos"}]
+}
+```
+
+**Errores de negocio** (400, 403, 409, 429) traen `detail` como objeto: `{"codigo": "...", "mensaje": "..."}`. Los códigos que el frontend tiene que mapear al texto de QA están en `docs/plan-sprint-2.md`, sección "Tabla código → texto".
+
+Endpoints nuevos o modificados de Sprint 2:
+
+| Método y ruta | Descripción |
+|---|---|
+| `GET /api/v1/auth/me` | Suma `requiere_registro`: `true` para un Oferente que todavía no completó el formulario |
+| `GET /api/v1/catalogos/registro-oferente` | Categorías activas, rangos de experiencia, días, horario por defecto y límites de trabajos |
+| `POST /api/v1/oferentes` | Confirma el registro en una sola transacción (201, 409 `perfil_existente`, 422 con `errores[]`) |
+| `GET /api/v1/oferentes/me` / `PUT /api/v1/oferentes/me` | Perfil privado (incluye DNI/CUIT) y edición sin DNI ni correo |
+| `GET /api/v1/oferentes/{id}` | Perfil público: sin DNI, sin estado de verificación, sin rechazos acumulados |
+| `POST /api/v1/oferentes/me/archivos/subidas` | Paso 1 de la subida: valida y devuelve `path` y `upload_url` firmada de Supabase |
+| `PUT /api/v1/oferentes/me/foto-perfil` · `DELETE …/foto-perfil` · `PUT …/portada` | Confirmación (paso 3) y borrado de imágenes únicas |
+| `GET /api/v1/oferentes/{id}/trabajos` · `POST /api/v1/oferentes/me/trabajos` · `DELETE …/trabajos/{id}` | Trabajos realizados con fotos ordenadas; el alta devuelve 409 `limite_trabajos` a partir del quinto |
+| `POST /api/v1/oferentes/{id}/solicitudes-resena` | Auth opcional: anónimo solo correo; el Profesional dueño, teléfono o correo. Límites anti-spam: 429 `limite_solicitudes` |
+| `GET /api/v1/oferentes/{id}/resenas` | Opiniones públicas: `cliente` = "Juan C.", sin contacto |
+
 ## Notas de alcance (Sprint 1, revisión 4)
 
 - El logout es stateless (no hay revocación real de tokens del lado del servidor).

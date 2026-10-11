@@ -73,6 +73,7 @@ def test_callback_exitoso_redirige_a_la_vista_de_perfil_con_token(client, db_ses
         "email": "cliente.google@test.com",
         "nombre": "Cliente Google",
         "rol": "Oferente",
+        "requiere_registro": True,
     }
 
 
