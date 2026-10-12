@@ -189,10 +189,10 @@ def _subir_fotos_trabajo(client, storage, token, cantidad):
     return paths
 
 
-def _cargar_trabajo(client, token, fotos, descripcion="Reemplazo del disyuntor diferencial del tablero."):
+def _cargar_trabajo(client, token, fotos, titulo="Cambio de disyuntor", descripcion="Reemplazo del disyuntor diferencial del tablero."):
     return client.post(
         "/api/v1/oferentes/me/trabajos",
-        json={"titulo": "Cambio de disyuntor", "descripcion": descripcion, "fotos": fotos},
+        json={"titulo": titulo, "descripcion": descripcion, "fotos": fotos},
         headers=_auth(token),
     )
 
@@ -260,18 +260,29 @@ def test_descripcion_obligatoria_y_con_minimo(client, storage, oferente):
     assert corta.json()["errores"] == [{"campo": "descripcion", "codigo": "longitud_minima"}]
 
 
-def test_titulo_es_opcional(client, storage, oferente):
+def test_titulo_obligatorio_y_no_vacio(client, storage, oferente):
     token, _ = oferente
     fotos = _subir_fotos_trabajo(client, storage, token, 1)
 
-    respuesta = client.post(
+    sin_titulo = client.post(
         "/api/v1/oferentes/me/trabajos",
-        json={"titulo": "  ", "descripcion": "Instalación completa de tablero.", "fotos": fotos},
+        json={"descripcion": "Instalación completa de tablero.", "fotos": fotos},
         headers=_auth(token),
     )
+    solo_espacios = _cargar_trabajo(client, token, fotos, titulo="   ")
 
-    assert respuesta.status_code == 201, respuesta.text
-    assert respuesta.json()["titulo"] is None
+    assert sin_titulo.json()["errores"] == [{"campo": "titulo", "codigo": "requerido"}]
+    assert solo_espacios.json()["errores"] == [{"campo": "titulo", "codigo": "longitud_minima"}]
+
+
+def test_titulo_demasiado_largo_da_422(client, storage, oferente):
+    token, _ = oferente
+    fotos = _subir_fotos_trabajo(client, storage, token, 1)
+
+    respuesta = _cargar_trabajo(client, token, fotos, titulo="x" * 101)
+
+    assert respuesta.status_code == 422
+    assert respuesta.json()["errores"] == [{"campo": "titulo", "codigo": "longitud_maxima"}]
 
 
 def test_sexto_trabajo_da_409_limite_trabajos(client, storage, oferente):

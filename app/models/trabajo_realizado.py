@@ -16,7 +16,7 @@ class TrabajoRealizado(Base):
 
     id_trabajo = Column(Integer, primary_key=True, index=True)
     oferente_id = Column(Integer, ForeignKey("oferentes.id_oferente", ondelete="CASCADE"), nullable=False, index=True)
-    titulo = Column(String(100), nullable=True)
+    titulo = Column(String(100), nullable=False)
     descripcion = Column(Text, nullable=False)
     fecha_creacion = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 

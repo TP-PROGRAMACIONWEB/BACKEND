@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -46,7 +46,3 @@ class SolicitudResena(Base):
 
     oferente = relationship("Oferente", back_populates="solicitudes_resena")
     resenas = relationship("Resena", back_populates="solicitud", cascade="all, delete-orphan")
-
-
-# Lo consultan los límites anti-spam por correo destino (HU-01, 24 h).
-Index("idx_solicitud_email_fecha", SolicitudResena.email_cliente, SolicitudResena.fecha_generacion)

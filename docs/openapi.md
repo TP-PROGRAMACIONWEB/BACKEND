@@ -61,8 +61,8 @@ Endpoints nuevos o modificados de Sprint 2:
 | `POST /api/v1/oferentes/me/archivos/subidas` | Paso 1 de la subida: valida y devuelve `path` y `upload_url` firmada de Supabase |
 | `PUT /api/v1/oferentes/me/foto-perfil` · `DELETE …/foto-perfil` · `PUT …/portada` | Confirmación (paso 3) y borrado de imágenes únicas |
 | `GET /api/v1/oferentes/{id}/trabajos` · `POST /api/v1/oferentes/me/trabajos` · `DELETE …/trabajos/{id}` | Trabajos realizados con fotos ordenadas; el alta devuelve 409 `limite_trabajos` a partir del quinto |
-| `POST /api/v1/oferentes/{id}/solicitudes-resena` | Auth opcional: anónimo solo correo; el Profesional dueño, teléfono o correo. Límites anti-spam: 429 `limite_solicitudes` |
-| `GET /api/v1/oferentes/{id}/resenas` | Opiniones públicas: `cliente` = "Juan C.", sin contacto |
+| `POST /api/v1/oferentes/{id}/solicitudes-resena` | Auth opcional: anónimo solo correo; el Profesional dueño, teléfono o correo. Límites anti-spam (el reenvío del mismo enlace también cuenta): 429 `limite_solicitudes` |
+| `GET /api/v1/oferentes/{id}/resenas` | Opiniones públicas paginadas (`pagina`, `por_pagina` de 1 a 10, por defecto 5; respuesta con `items`, `total`, `paginas`): `cliente` = "Juan C.", sin contacto |
 
 ## Notas de alcance (Sprint 1, revisión 4)
 

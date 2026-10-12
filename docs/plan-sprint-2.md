@@ -17,6 +17,14 @@
 > expone la foto principal y la lista ordenada, y el perfil expone el cupo de
 > trabajos y de fotos para que el frontend oculte el botón. Ver "Reglas de
 > trabajos realizados".
+>
+> **Revisión 3 (2026-10-12)** — El equipo de frontend encontró cuatro problemas
+> en el último PR y se corrigen acá: (1) **título obligatorio** en los trabajos
+> realizados (la descripción ya lo era); (2) los **límites anti-spam cuentan los
+> reenvíos** del mismo enlace y se chequean antes de mandar el correo (tabla
+> `EMISIONES_RESENA`, migración `c4f1a8e2b9d7`); (3) una **cuenta bloqueada pierde
+> el acceso en el acto**: el token deja de servir aunque no haya vencido; (4) las
+> **opiniones del perfil se paginan**, 5 por página por defecto y hasta 10.
 
 ## Estado de la implementación (2026-10-11)
 
@@ -418,7 +426,7 @@ orden         = Column(SmallInteger, nullable=True)        # nuevo (rev. 2): 1..
 # TRABAJO_REALIZADO — tabla nueva
 id_trabajo     = Column(Integer, primary_key=True)
 oferente_id    = Column(Integer, ForeignKey("oferentes.id_oferente", ondelete="CASCADE"), nullable=False, index=True)
-titulo         = Column(String(100), nullable=True)
+titulo         = Column(String(100), nullable=False)             # obligatorio desde la rev. 3
 descripcion    = Column(Text, nullable=False)             # máx. 1000 caracteres, validado en el schema
 fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
 ```
@@ -519,7 +527,7 @@ informativas de matrícula.
 
 ### T07 — Pestaña "Opiniones (n)" (D11, D12)
 
-`GET /oferentes/{id}/resenas` devuelve un `ResenaPublicaOut` nuevo:
+`GET /oferentes/{id}/resenas` devuelve una página (`ResenasPaginadasOut`: `items`, `total`, `pagina`, `por_pagina`, `paginas`) de `ResenaPublicaOut`. `por_pagina` va de 1 a 10 y por defecto es 5 (rev. 3). Cada item tiene esta forma:
 
 ```json
 {
@@ -585,9 +593,9 @@ compartida entre instancias, así que **el límite se cuenta en la base**:
 
 | Límite | Valor | Código |
 |---|---|---|
-| Solicitudes pendientes para el mismo par (oferente, correo) | 1 activa. Si ya hay una vigente, se **reenvía la misma** en vez de crear otra | — (idempotente) |
-| Solicitudes por correo destino, en 24 h, a cualquier oferente | 5 | `429 limite_solicitudes` |
-| Solicitudes por oferente, en 24 h | 30 | `429 limite_solicitudes` |
+| Solicitudes pendientes para el mismo par (oferente, correo) | 1 activa. Si ya hay una vigente, se **reenvía la misma** en vez de crear otra. El reenvío **también gasta cupo** de los dos límites de abajo y se chequea antes de mandar el correo (rev. 3) | — (idempotente) |
+| Enlaces emitidos (nuevo o reenvío) por correo destino, en 24 h, a cualquier oferente | 5 | `429 limite_solicitudes` |
+| Enlaces emitidos (nuevo o reenvío) por oferente, en 24 h | 30 | `429 limite_solicitudes` |
 
 Los valores van a configuración (`RESENA_LIMITE_*`). La idempotencia del primer
 renglón también resuelve el doble clic en "Generar enlace".
@@ -727,14 +735,14 @@ Las filas existentes no cumplen las reglas nuevas. La migración las normaliza
 | `PUT /api/v1/oferentes/me/portada` | **Nuevo**: ídem | Oferente registrado |
 | `DELETE /api/v1/oferentes/me/foto-perfil` | **Nuevo**: vuelve a las iniciales | Oferente registrado |
 | `GET /api/v1/oferentes/{id}/trabajos` | **Nuevo**: lista pública, más nuevos primero | Pública |
-| `POST /api/v1/oferentes/me/trabajos` | **Nuevo**: `{titulo?, descripcion, fotos: [path]}` | Oferente registrado |
+| `POST /api/v1/oferentes/me/trabajos` | **Nuevo**: `{titulo, descripcion, fotos: [path]}` (título obligatorio desde la rev. 3) | Oferente registrado |
 | `DELETE /api/v1/oferentes/me/trabajos/{id}` | **Nuevo**: borra las filas y los objetos | Oferente dueño |
 
 ### Reseñas (HU-01 v1.2)
 
 | Método y ruta | Cambio | Auth |
 |---|---|---|
-| `POST /api/v1/oferentes/{id}/solicitudes-resena` | Auth **opcional**; regla D8; anti auto-reseña; límites; idempotente por (oferente, correo) | Pública / Oferente dueño |
+| `POST /api/v1/oferentes/{id}/solicitudes-resena` | Auth **opcional**; regla D8; anti auto-reseña; límites (el reenvío también cuenta); idempotente por (oferente, correo) | Pública / Oferente dueño |
 | `POST /api/v1/resenas` | UPDATE condicional + `UNIQUE(solicitud_id)`; errores con código | Pública |
 | `GET /api/v1/oferentes/{id}/resenas` | Salida `ResenaPublicaOut` | Pública |
 | `PATCH /api/v1/resenas/{id}/moderar` | `get_oferente_registrado`; errores con código; alerta deduplicada | Oferente dueño |
@@ -783,7 +791,8 @@ son de UX; las del backend son las que valen.**
 | Calificar | Sin login o en un perfil ajeno → solo el input de correo, obligatorio. En el perfil propio → teléfono y correo |
 | Trabajos (rev. 2) | Contador "Foto del Trabajo (X/5)" con `limites.fotos_por_trabajo`. Mandar `fotos` **en el orden de carga**. La tarjeta usa `foto_principal_url` y el detalle hace el carrusel con `fotos[]`. Ocultar "+ Cargar nuevo trabajo" cuando `cantidad_trabajos >= limites.trabajos` |
 | Badge de la campana | Usar `pendientes_de_accion` |
-| Opiniones | `GET /oferentes/{id}/resenas`. Promedio con **1 decimal, half-up** |
+| Opiniones | `GET /oferentes/{id}/resenas?pagina=1&por_pagina=5` (5 o 10 por página). La respuesta es un **objeto paginado**, no una lista: los datos están en `items`. Promedio con **1 decimal, half-up** |
+| Cuenta bloqueada | Cualquier request con un token de una cuenta que no está `Activa` responde **401** `La cuenta no está activa`, aunque el token no haya vencido. Hay que sacar el token guardado. Para volver a entrar, la cuenta se reactiva y se hace login de nuevo |
 
 **Tabla código → texto (para el frontend)**
 

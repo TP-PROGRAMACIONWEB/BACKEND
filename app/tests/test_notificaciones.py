@@ -213,7 +213,7 @@ def test_aceptar_publica_recalcula_el_promedio_y_cierra_la_notificacion(client, 
     assert response.status_code == 200, response.text
     assert response.json()["estado"] == "Aceptada"
     # Se publica en el perfil...
-    assert len(client.get(f"/api/v1/oferentes/{oferente_id}/resenas").json()) == 1
+    assert len(client.get(f"/api/v1/oferentes/{oferente_id}/resenas").json()["items"]) == 1
     # ...el promedio se recalcula...
     db_session.expire_all()
     assert float(db_session.get(Oferente, oferente_id).promedio_calificacion) == 4.5
@@ -238,7 +238,7 @@ def test_rechazar_no_publica_no_suma_al_promedio_y_cierra_la_notificacion(client
     assert response.status_code == 200
     assert response.json()["estado"] == "Rechazada"
     # No se publica y el promedio sigue siendo el de la aceptada.
-    assert len(client.get(f"/api/v1/oferentes/{oferente_id}/resenas").json()) == 1
+    assert len(client.get(f"/api/v1/oferentes/{oferente_id}/resenas").json()["items"]) == 1
     db_session.expire_all()
     assert float(db_session.get(Oferente, oferente_id).promedio_calificacion) == 4.5
 
@@ -274,7 +274,7 @@ def test_el_listado_publico_no_expone_el_contacto(client, db_session):
     resena = _dejar_resena(client, oferente_id)
     client.patch(f"/api/v1/resenas/{resena['id_resena']}/moderar", json={"aceptar": True}, headers=_auth(token))
 
-    publica = client.get(f"/api/v1/oferentes/{oferente_id}/resenas").json()[0]
+    publica = client.get(f"/api/v1/oferentes/{oferente_id}/resenas").json()["items"][0]
 
     assert "telefono_cliente" not in publica
     assert "email_cliente" not in publica

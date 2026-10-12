@@ -152,6 +152,31 @@ def test_limite_por_profesional_en_24_horas(client, db_session, monkeypatch):
     assert respuesta.status_code == 429
 
 
+def test_reenviar_el_mismo_enlace_gasta_el_limite_por_correo(client, db_session, emails, monkeypatch):
+    monkeypatch.setattr(settings, "resena_limite_por_email_24h", 2)
+    _, oferente_id = crear_oferente_completo(client, db_session, email="reenvio@test.com", dni_cuit="20-30111222-0")
+
+    assert _generar(client, oferente_id, email_cliente="repite@test.com").status_code == 201  # enlace nuevo
+    assert _generar(client, oferente_id, email_cliente="repite@test.com").status_code == 201  # reenvío
+    tercero = _generar(client, oferente_id, email_cliente="repite@test.com")
+
+    assert tercero.status_code == 429
+    assert tercero.json()["detail"]["codigo"] == "limite_solicitudes"
+    assert len(emails.enviados) == 2  # el rechazado no manda correo
+
+
+def test_reenviar_el_mismo_enlace_gasta_el_limite_por_profesional(client, db_session, emails, monkeypatch):
+    monkeypatch.setattr(settings, "resena_limite_por_oferente_24h", 2)
+    _, oferente_id = crear_oferente_completo(client, db_session, email="tope-reenvio@test.com", dni_cuit="20-30111222-0")
+
+    assert _generar(client, oferente_id, email_cliente="uno@test.com").status_code == 201
+    assert _generar(client, oferente_id, email_cliente="uno@test.com").status_code == 201  # reenvío
+    otro = _generar(client, oferente_id, email_cliente=_nuevo_correo())
+
+    assert otro.status_code == 429
+    assert len(emails.enviados) == 2
+
+
 # --- Registrar la reseña -----------------------------------------------------
 
 
@@ -237,7 +262,7 @@ def test_opiniones_muestran_nombre_de_pila_mas_inicial(client, db_session):
     ).json()["id_resena"]
     client.patch(f"/api/v1/resenas/{resena_id}/moderar", json={"aceptar": True}, headers=_auth(token))
 
-    opiniones = client.get(f"/api/v1/oferentes/{oferente_id}/resenas").json()
+    opiniones = client.get(f"/api/v1/oferentes/{oferente_id}/resenas").json()["items"]
 
     assert opiniones[0]["cliente"] == "Juan C."
     assert opiniones[0]["puntuacion_global"] == 4.5
@@ -251,3 +276,64 @@ def test_cantidad_resenas_del_perfil_cuenta_solo_las_aceptadas(client, db_sessio
     client.patch(f"/api/v1/resenas/{aceptada}/moderar", json={"aceptar": True}, headers=_auth(token))
 
     assert client.get(f"/api/v1/oferentes/{oferente_id}").json()["cantidad_resenas"] == 1
+
+
+# --- Paginación de Opiniones -------------------------------------------------
+
+
+def _publicar_opiniones(client, db_session, token, oferente_id, cantidad):
+    ids = [_dejar_resena(client, oferente_id).json()["id_resena"] for _ in range(cantidad)]
+    for resena_id in ids:
+        client.patch(f"/api/v1/resenas/{resena_id}/moderar", json={"aceptar": True}, headers=_auth(token))
+    return ids
+
+
+def test_opiniones_se_paginan_y_no_repiten_ni_saltean(client, db_session):
+    token, oferente_id = crear_oferente_completo(client, db_session, email="paginas@test.com", dni_cuit="20-30111222-0")
+    _publicar_opiniones(client, db_session, token, oferente_id, 7)
+    url = f"/api/v1/oferentes/{oferente_id}/resenas"
+
+    primera = client.get(url, params={"pagina": 1, "por_pagina": 5}).json()
+    segunda = client.get(url, params={"pagina": 2, "por_pagina": 5}).json()
+    todas = client.get(url, params={"por_pagina": 10}).json()
+
+    assert primera["total"] == 7
+    assert primera["paginas"] == 2
+    assert (primera["pagina"], primera["por_pagina"]) == (1, 5)
+    assert len(primera["items"]) == 5
+    assert len(segunda["items"]) == 2
+    assert len(todas["items"]) == 7
+    assert todas["paginas"] == 1
+    paginados = [opinion["id_resena"] for opinion in primera["items"] + segunda["items"]]
+    assert paginados == [opinion["id_resena"] for opinion in todas["items"]]
+
+
+def test_sin_pedir_tamano_la_pagina_tiene_5_opiniones(client, db_session):
+    token, oferente_id = crear_oferente_completo(client, db_session, email="tamano@test.com", dni_cuit="20-30111222-0")
+    _publicar_opiniones(client, db_session, token, oferente_id, 6)
+
+    cuerpo = client.get(f"/api/v1/oferentes/{oferente_id}/resenas").json()
+
+    assert cuerpo["por_pagina"] == 5
+    assert len(cuerpo["items"]) == 5
+
+
+def test_pagina_fuera_de_rango_viene_vacia_y_parametros_invalidos_dan_422(client, db_session):
+    token, oferente_id = crear_oferente_completo(client, db_session, email="rango@test.com", dni_cuit="20-30111222-0")
+    _publicar_opiniones(client, db_session, token, oferente_id, 2)
+    url = f"/api/v1/oferentes/{oferente_id}/resenas"
+
+    fuera = client.get(url, params={"pagina": 9}).json()
+
+    assert fuera["items"] == []
+    assert fuera["total"] == 2
+    assert client.get(url, params={"por_pagina": 11}).status_code == 422
+    assert client.get(url, params={"pagina": 0}).status_code == 422
+
+
+def test_profesional_sin_opiniones_tiene_cero_paginas(client, db_session):
+    _, oferente_id = crear_oferente_completo(client, db_session, email="vacio@test.com", dni_cuit="20-30111222-0")
+
+    cuerpo = client.get(f"/api/v1/oferentes/{oferente_id}/resenas").json()
+
+    assert cuerpo == {"items": [], "total": 0, "pagina": 1, "por_pagina": 5, "paginas": 0}

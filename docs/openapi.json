@@ -1279,7 +1279,7 @@
         "tags": [
           "Reseñas"
         ],
-        "summary": "Opiniones aceptadas de un Profesional (público)",
+        "summary": "Opiniones aceptadas de un Profesional, paginadas (público)",
         "description": "RF7 / HU-01 T07 — Solo reseñas `Aceptada`, más nuevas primero. Sin datos\nde contacto del cliente y con el nombre reducido a \"Juan C.\".",
         "operationId": "listar_resenas_publicas_api_v1_oferentes__oferente_id__resenas_get",
         "parameters": [
@@ -1291,6 +1291,33 @@
               "type": "integer",
               "title": "Oferente Id"
             }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Número de página, desde 1.",
+              "default": 1,
+              "title": "Pagina"
+            },
+            "description": "Número de página, desde 1."
+          },
+          {
+            "name": "por_pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 10,
+              "minimum": 1,
+              "description": "Opiniones por página: 5 o 10 según lo que elija el frontend.",
+              "default": 5,
+              "title": "Por Pagina"
+            },
+            "description": "Opiniones por página: 5 o 10 según lo que elija el frontend."
           }
         ],
         "responses": {
@@ -1299,24 +1326,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ResenaPublicaOut"
-                  },
-                  "title": "Response Listar Resenas Publicas Api V1 Oferentes  Oferente Id  Resenas Get"
+                  "$ref": "#/components/schemas/ResenasPaginadasOut"
                 }
               }
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "`pagina` menor a 1, o `por_pagina` fuera de 1 a 10"
           }
         }
       }
@@ -3983,6 +3999,47 @@
           "puntuacion_global": 4.75
         }
       },
+      "ResenasPaginadasOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ResenaPublicaOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Cantidad de opiniones aceptadas, sin paginar."
+          },
+          "pagina": {
+            "type": "integer",
+            "title": "Pagina",
+            "description": "Página devuelta, desde 1."
+          },
+          "por_pagina": {
+            "type": "integer",
+            "title": "Por Pagina",
+            "description": "Tamaño de página pedido."
+          },
+          "paginas": {
+            "type": "integer",
+            "title": "Paginas",
+            "description": "Cantidad de páginas con ese tamaño. 0 si el Profesional no tiene opiniones."
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "pagina",
+          "por_pagina",
+          "paginas"
+        ],
+        "title": "ResenasPaginadasOut",
+        "description": "Una página de la pestaña \"Opiniones\" del perfil público."
+      },
       "RolUsuario": {
         "type": "string",
         "enum": [
@@ -4320,16 +4377,11 @@
       "TrabajoCreate": {
         "properties": {
           "titulo": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 100
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Titulo"
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Titulo",
+            "description": "Obligatorio. Entre 1 y 100 caracteres."
           },
           "descripcion": {
             "type": "string",
@@ -4350,11 +4402,12 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "titulo",
           "descripcion",
           "fotos"
         ],
         "title": "TrabajoCreate",
-        "description": "Body de `POST /api/v1/oferentes/me/trabajos` (HU-04 T06, D13).\n\n`fotos` son los paths que devolvió la subida, **en el orden de carga**: la\nprimera es la foto principal (caso A50).",
+        "description": "Body de `POST /api/v1/oferentes/me/trabajos` (HU-04 T06, D13).\n\n`titulo` y `descripcion` son obligatorios. `fotos` son los paths que devolvió\nla subida, **en el orden de carga**: la primera es la foto principal (caso A50).",
         "example": {
           "descripcion": "Reemplazo del disyuntor diferencial del tablero principal.",
           "fotos": [
@@ -4370,14 +4423,7 @@
             "title": "Id Trabajo"
           },
           "titulo": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Titulo"
           },
           "descripcion": {
@@ -4413,6 +4459,7 @@
         "type": "object",
         "required": [
           "id_trabajo",
+          "titulo",
           "descripcion",
           "fecha_creacion"
         ],
