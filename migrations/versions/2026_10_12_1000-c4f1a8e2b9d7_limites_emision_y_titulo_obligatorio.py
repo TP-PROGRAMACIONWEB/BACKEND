@@ -12,6 +12,7 @@ Cambios (ver docs/plan-sprint-2.md, "Revisión 3"):
   Se carga con las solicitudes de las últimas 24 h, así los límites siguen
   igual en el momento de migrar.
 - TRABAJOS_REALIZADOS.titulo pasa a NOT NULL: el título es obligatorio.
+- TRABAJOS_REALIZADOS.descripcion pasa a NULL: la descripción es opcional.
 
 Solo se ejecuta en PostgreSQL (env.py rechaza SQLite).
 """
@@ -33,6 +34,9 @@ SCHEMA = "offix"
 # es de Sprint 2 y todavía no tiene datos reales; el texto es solo para que la
 # restricción pueda aplicarse.
 TITULO_FALTANTE = "UPDATE offix.trabajos_realizados SET titulo = 'Sin título' WHERE titulo IS NULL"
+# Al volver atrás, la descripción vuelve a ser obligatoria: las filas sin texto
+# reciben uno genérico.
+DESCRIPCION_FALTANTE = "UPDATE offix.trabajos_realizados SET descripcion = 'Sin descripción' WHERE descripcion IS NULL"
 
 COPIAR_EMISIONES_24_HORAS = """
 INSERT INTO offix.emisiones_resena (solicitud_id, oferente_id, email_cliente, fecha_emision)
@@ -72,9 +76,12 @@ def upgrade() -> None:
     # --- TRABAJOS_REALIZADOS ------------------------------------------------
     op.execute(TITULO_FALTANTE)
     op.alter_column("trabajos_realizados", "titulo", existing_type=sa.String(length=100), nullable=False, schema=SCHEMA)
+    op.alter_column("trabajos_realizados", "descripcion", existing_type=sa.Text(), nullable=True, schema=SCHEMA)
 
 
 def downgrade() -> None:
+    op.execute(DESCRIPCION_FALTANTE)
+    op.alter_column("trabajos_realizados", "descripcion", existing_type=sa.Text(), nullable=False, schema=SCHEMA)
     op.alter_column("trabajos_realizados", "titulo", existing_type=sa.String(length=100), nullable=True, schema=SCHEMA)
 
     op.create_index(

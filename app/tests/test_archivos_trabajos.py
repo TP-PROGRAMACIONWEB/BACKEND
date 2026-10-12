@@ -249,14 +249,16 @@ def test_la_misma_foto_dos_veces_da_422(client, storage, oferente):
     assert respuesta.json()["errores"] == [{"campo": "fotos", "codigo": "fotos_duplicadas"}]
 
 
-def test_descripcion_obligatoria_y_con_minimo(client, storage, oferente):
+def test_descripcion_opcional_pero_con_minimo_si_se_carga(client, storage, oferente):
     token, _ = oferente
     fotos = _subir_fotos_trabajo(client, storage, token, 1)
 
-    vacia = _cargar_trabajo(client, token, fotos, descripcion="")
+    sin_descripcion = _cargar_trabajo(client, token, fotos, titulo="Sin detalle", descripcion="")
     corta = _cargar_trabajo(client, token, fotos, descripcion="corto")
 
-    assert vacia.json()["errores"] == [{"campo": "descripcion", "codigo": "requerido"}]
+    assert sin_descripcion.status_code == 201, sin_descripcion.text
+    assert sin_descripcion.json()["descripcion"] is None
+    assert corta.status_code == 422
     assert corta.json()["errores"] == [{"campo": "descripcion", "codigo": "longitud_minima"}]
 
 

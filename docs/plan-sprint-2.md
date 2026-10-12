@@ -19,8 +19,8 @@
 > trabajos realizados".
 >
 > **Revisión 3 (2026-10-12)** — El equipo de frontend encontró cuatro problemas
-> en el último PR y se corrigen acá: (1) **título obligatorio** en los trabajos
-> realizados (la descripción ya lo era); (2) los **límites anti-spam cuentan los
+> en el último PR y se corrigen acá: (1) en los trabajos realizados, **título
+> obligatorio** y **descripción opcional** (si se carga, de 10 a 1000 caracteres); (2) los **límites anti-spam cuentan los
 > reenvíos** del mismo enlace y se chequean antes de mandar el correo (tabla
 > `EMISIONES_RESENA`, migración `c4f1a8e2b9d7`); (3) una **cuenta bloqueada pierde
 > el acceso en el acto**: el token deja de servir aunque no haya vencido; (4) las
@@ -439,8 +439,8 @@ fila y el objeto anterior en la misma operación.
 | Regla | Definición |
 |---|---|
 | Fotos | **1 a 5** por trabajo, JPG/PNG, hasta 5 MB cada una |
-| Descripción | **Obligatoria**, de 10 a 1000 caracteres |
-| Título | Opcional, máx. 100. Vacío → `NULL` |
+| Descripción | **Opcional** (rev. 3). Vacía → `NULL`; si se carga, de 10 a 1000 caracteres |
+| Título | **Obligatorio** (rev. 3), de 1 a 100 caracteres. Solo espacios → rechazado |
 | Cupo | **Máx. 5 trabajos** por Oferente. El sexto → `409 limite_trabajos` |
 | Orden de los trabajos | Más nuevo primero |
 | Orden de las fotos (rev. 2) | El **orden en que vienen en `fotos: [path]`** del POST se guarda en `orden` (1..5). **La foto principal es la `orden = 1`**, la primera cargada (caso A50) |
@@ -471,7 +471,7 @@ cambiarlas se borra el trabajo y se carga de nuevo.
 
 > **[A validar con QA/PM]** El caso A46 dice que el botón Guardar "no se
 > habilita hasta cargar un título e img", pero el título es opcional y la
-> descripción obligatoria. Queda: **foto + descripción** habilitan el botón.
+> descripción obligatoria. Queda: **foto + título** habilitan el botón (rev. 3: la descripción es opcional y el título, obligatorio).
 > La revisión 2 del Excel **mantiene esa contradicción**, así que hay que
 > volver a pedirla. También agrega "en el mockup se propone un formato, avisar
 > si lo cambio" sobre las 5 imágenes: el contrato de arriba (lista ordenada +

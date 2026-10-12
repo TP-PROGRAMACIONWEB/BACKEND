@@ -4384,11 +4384,18 @@
             "description": "Obligatorio. Entre 1 y 100 caracteres."
           },
           "descripcion": {
-            "type": "string",
-            "maxLength": 1000,
-            "minLength": 10,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000,
+                "minLength": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Descripcion",
-            "description": "Obligatoria. Entre 10 y 1000 caracteres."
+            "description": "Opcional. Si se carga, entre 10 y 1000 caracteres."
           },
           "fotos": {
             "items": {
@@ -4403,11 +4410,10 @@
         "type": "object",
         "required": [
           "titulo",
-          "descripcion",
           "fotos"
         ],
         "title": "TrabajoCreate",
-        "description": "Body de `POST /api/v1/oferentes/me/trabajos` (HU-04 T06, D13).\n\n`titulo` y `descripcion` son obligatorios. `fotos` son los paths que devolvió\nla subida, **en el orden de carga**: la primera es la foto principal (caso A50).",
+        "description": "Body de `POST /api/v1/oferentes/me/trabajos` (HU-04 T06, D13).\n\n`titulo` es obligatorio; `descripcion` es opcional (si se carga, entre 10 y\n1000 caracteres). `fotos` son los paths que devolvió\nla subida, **en el orden de carga**: la primera es la foto principal (caso A50).",
         "example": {
           "descripcion": "Reemplazo del disyuntor diferencial del tablero principal.",
           "fotos": [
@@ -4427,7 +4433,14 @@
             "title": "Titulo"
           },
           "descripcion": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Descripcion"
           },
           "fecha_creacion": {
@@ -4460,7 +4473,6 @@
         "required": [
           "id_trabajo",
           "titulo",
-          "descripcion",
           "fecha_creacion"
         ],
         "title": "TrabajoOut"
