@@ -42,6 +42,14 @@ def db_session():
         Base.metadata.drop_all(bind=engine)
 
 
+@pytest.fixture(autouse=True)
+def limites_anti_spam_altos(monkeypatch):
+    """La suite genera muchos enlaces para el mismo Profesional. Los límites reales
+    se prueban con su propio test, que los baja con monkeypatch."""
+    monkeypatch.setattr(settings, "resena_limite_por_email_24h", 10_000)
+    monkeypatch.setattr(settings, "resena_limite_por_oferente_24h", 10_000)
+
+
 @pytest.fixture()
 def emails() -> EmailServiceFake:
     """Doble del servicio de correo: la suite nunca manda un mail real."""
@@ -107,19 +115,29 @@ def crear_admin_db(db_session, email: str = "admin@test.com") -> Usuario:
     return admin
 
 
-def crear_oferente_completo(client, db_session, email: str = "oferente@test.com", dni_cuit: str = "20-11111111-1"):
+def formulario_registro(categoria_id: int, dni_cuit: str = "20-11111111-2", nombre: str = "Oferente Prueba", **extra) -> dict:
+    """Body válido de POST /api/v1/oferentes. `extra` pisa campos puntuales."""
+    cuerpo = {
+        "nombre": nombre,
+        "dni_cuit": dni_cuit,
+        "telefono": "3564-400000",
+        "categoria_id": categoria_id,
+        "dias_atencion": [1, 2, 3, 4, 5],
+        "hora_inicio_atencion": "08:00",
+        "hora_fin_atencion": "18:00",
+        "disponible_emergencia": False,
+    }
+    cuerpo.update(extra)
+    return cuerpo
+
+
+def crear_oferente_completo(client, db_session, email: str = "oferente@test.com", dni_cuit: str = "20-11111111-2"):
     """Registra un usuario, loguea y crea su perfil de Oferente. Devuelve (token, oferente_id)."""
     token = registrar_y_loguear(client, email)
     categoria = crear_categoria_db(db_session, nombre=f"Categoria-{email}")
     response = client.post(
         "/api/v1/oferentes",
-        json={
-            "nombre": "Oferente",
-            "apellido": "Prueba",
-            "dni_cuit": dni_cuit,
-            "telefono": "+54 3564 400000",
-            "categoria_id": categoria.id_categoria,
-        },
+        json=formulario_registro(categoria.id_categoria, dni_cuit=dni_cuit),
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 201, response.text

@@ -1,3 +1,4 @@
+import itertools
 from datetime import datetime, timedelta, timezone
 from urllib.parse import unquote
 
@@ -6,13 +7,24 @@ from app.models.solicitud_resena import SolicitudResena
 from app.tests.conftest import CRITERIOS_VALIDOS, PUNTUACION_GLOBAL_ESPERADA, crear_oferente_completo
 
 DATOS_CLIENTE = {"nombre_cliente": "Juan Cliente", "email_cliente": "cliente@test.com"}
+_correos_unicos = itertools.count(1)
 
 
-def _generar_solicitud(client, oferente_id, **datos_cliente):
-    """Genera un enlace. El endpoint es público: no lleva token."""
+def _auth(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _generar_solicitud(client, oferente_id, token=None, **datos_cliente):
+    """Genera un enlace. Sin token es un cliente anónimo: solo puede cargar correo.
+    Con el token del Profesional dueño, también puede cargar teléfono.
+
+    Cada llamada usa un correo distinto: el enlace es idempotente por (oferente,
+    correo), y los tests que generan varios enlaces no tienen que chocar con eso."""
+    datos = {"nombre_cliente": "Juan Cliente", "email_cliente": f"cliente{next(_correos_unicos)}@test.com", **datos_cliente}
     response = client.post(
         f"/api/v1/oferentes/{oferente_id}/solicitudes-resena",
-        json={**DATOS_CLIENTE, **datos_cliente},
+        json=datos,
+        headers=_auth(token) if token else {},
     )
     assert response.status_code == 201, response.text
     return response.json()["codigo_unico"]
@@ -37,7 +49,7 @@ def _vencer_solicitud(db_session, codigo):
 def test_generar_solicitud_sin_token_funciona(client, db_session):
     """El flujo es público: el botón "Calificar" está en el perfil público y lo
     puede usar tanto un cliente como el propio Profesional."""
-    _, oferente_id = crear_oferente_completo(client, db_session, email="publico@test.com", dni_cuit="20-10000001-1")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="publico@test.com", dni_cuit="20-10000001-7")
 
     response = client.post(f"/api/v1/oferentes/{oferente_id}/solicitudes-resena", json=DATOS_CLIENTE)
 
@@ -54,11 +66,13 @@ def test_generar_solicitud_oferente_inexistente_404(client):
 
 
 def test_solo_telefono_devuelve_whatsapp_url_y_no_manda_correo(client, db_session, emails):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="wpp@test.com", dni_cuit="20-10000002-2")
+    """El Profesional dueño puede generar el enlace solo con teléfono (D8)."""
+    token, oferente_id = crear_oferente_completo(client, db_session, email="wpp@test.com", dni_cuit="20-10000002-5")
 
     response = client.post(
         f"/api/v1/oferentes/{oferente_id}/solicitudes-resena",
         json={"nombre_cliente": "Juan Cliente", "telefono_cliente": "351-6924551"},
+        headers=_auth(token),
     )
 
     assert response.status_code == 201, response.text
@@ -92,11 +106,12 @@ def test_solo_mail_manda_el_correo_y_no_devuelve_whatsapp_url(client, db_session
 
 
 def test_los_dos_contactos_usan_los_dos_canales(client, db_session, emails):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="ambos@test.com", dni_cuit="20-10000004-4")
+    token, oferente_id = crear_oferente_completo(client, db_session, email="ambos@test.com", dni_cuit="20-10000004-1")
 
     response = client.post(
         f"/api/v1/oferentes/{oferente_id}/solicitudes-resena",
         json={"nombre_cliente": "Juan Cliente", "telefono_cliente": "3564-692755", "email_cliente": "juan@test.com"},
+        headers=_auth(token),
     )
 
     assert response.status_code == 201, response.text
@@ -108,7 +123,7 @@ def test_los_dos_contactos_usan_los_dos_canales(client, db_session, emails):
 
 
 def test_sin_ningun_contacto_422_y_no_envia_nada(client, db_session, emails):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="sincontacto@test.com", dni_cuit="20-10000005-5")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="sincontacto@test.com", dni_cuit="20-10000006-8")
 
     response = client.post(f"/api/v1/oferentes/{oferente_id}/solicitudes-resena", json={"nombre_cliente": "Juan Cliente"})
 
@@ -118,7 +133,7 @@ def test_sin_ningun_contacto_422_y_no_envia_nada(client, db_session, emails):
 
 
 def test_sin_nombre_422(client, db_session):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="sinnombre@test.com", dni_cuit="20-10000006-6")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="sinnombre@test.com", dni_cuit="20-10000006-8")
 
     response = client.post(f"/api/v1/oferentes/{oferente_id}/solicitudes-resena", json={"email_cliente": "juan@test.com"})
 
@@ -126,11 +141,12 @@ def test_sin_nombre_422(client, db_session):
 
 
 def test_telefono_con_caracteres_no_numericos_422(client, db_session):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="telmal@test.com", dni_cuit="20-10000007-7")
+    token, oferente_id = crear_oferente_completo(client, db_session, email="telmal@test.com", dni_cuit="20-10000007-6")
 
     response = client.post(
         f"/api/v1/oferentes/{oferente_id}/solicitudes-resena",
         json={"nombre_cliente": "Juan Cliente", "telefono_cliente": "351-69A4551"},
+        headers=_auth(token),
     )
 
     assert response.status_code == 422
@@ -138,18 +154,19 @@ def test_telefono_con_caracteres_no_numericos_422(client, db_session):
 
 def test_telefono_con_0_15_o_prefijo_pais_422(client, db_session):
     """El usuario carga código de área y línea, nada más."""
-    _, oferente_id = crear_oferente_completo(client, db_session, email="telpref@test.com", dni_cuit="20-10000008-8")
+    token, oferente_id = crear_oferente_completo(client, db_session, email="telpref@test.com", dni_cuit="20-10000008-4")
 
     for telefono in ("0351-6924551", "351-156924551", "+543516924551"):
         response = client.post(
             f"/api/v1/oferentes/{oferente_id}/solicitudes-resena",
             json={"nombre_cliente": "Juan Cliente", "telefono_cliente": telefono},
+            headers=_auth(token),
         )
         assert response.status_code == 422, f"{telefono} debería rechazarse"
 
 
 def test_correo_con_formato_invalido_422(client, db_session):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="mailmal@test.com", dni_cuit="20-10000009-9")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="mailmal@test.com", dni_cuit="20-10000009-2")
 
     response = client.post(
         f"/api/v1/oferentes/{oferente_id}/solicitudes-resena",
@@ -161,7 +178,7 @@ def test_correo_con_formato_invalido_422(client, db_session):
 
 def test_correo_con_tld_ar_es_valido(client, db_session):
     """La validación es estándar de email: `.com.ar` y `.edu.ar` se aceptan."""
-    _, oferente_id = crear_oferente_completo(client, db_session, email="mailar@test.com", dni_cuit="20-10000010-0")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="mailar@test.com", dni_cuit="20-10000010-6")
 
     response = client.post(
         f"/api/v1/oferentes/{oferente_id}/solicitudes-resena",
@@ -172,11 +189,12 @@ def test_correo_con_tld_ar_es_valido(client, db_session):
 
 
 def test_whatsapp_url_lleva_el_mensaje_de_qa_con_el_link(client, db_session):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="texto@test.com", dni_cuit="20-10000011-1")
+    token, oferente_id = crear_oferente_completo(client, db_session, email="texto@test.com", dni_cuit="20-10000011-4")
 
     response = client.post(
         f"/api/v1/oferentes/{oferente_id}/solicitudes-resena",
         json={"nombre_cliente": "Juan Cliente", "telefono_cliente": "3516924551"},
+        headers=_auth(token),
     )
 
     cuerpo = response.json()
@@ -191,8 +209,8 @@ def test_whatsapp_url_lleva_el_mensaje_de_qa_con_el_link(client, db_session):
 
 
 def test_ver_solicitud_devuelve_los_datos_precargados(client, db_session):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="vista@test.com", dni_cuit="20-10000012-2")
-    codigo = _generar_solicitud(client, oferente_id, telefono_cliente="3516924551")
+    token, oferente_id = crear_oferente_completo(client, db_session, email="vista@test.com", dni_cuit="20-10000012-2")
+    codigo = _generar_solicitud(client, oferente_id, token=token, telefono_cliente="3516924551", email_cliente="cliente@test.com")
 
     response = client.get(f"/api/v1/solicitudes-resena/{codigo}")
 
@@ -211,7 +229,7 @@ def test_ver_solicitud_codigo_inexistente_404(client):
 
 
 def test_ver_solicitud_ya_utilizada_no_es_utilizable(client, db_session):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="usada@test.com", dni_cuit="20-10000013-3")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="usada@test.com", dni_cuit="20-10000013-0")
     codigo = _generar_solicitud(client, oferente_id)
     _registrar_resena(client, codigo)
 
@@ -221,7 +239,7 @@ def test_ver_solicitud_ya_utilizada_no_es_utilizable(client, db_session):
 
 
 def test_ver_solicitud_vencida_queda_expirada(client, db_session):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="vencida@test.com", dni_cuit="20-10000014-4")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="vencida@test.com", dni_cuit="20-10000014-9")
     codigo = _generar_solicitud(client, oferente_id)
     _vencer_solicitud(db_session, codigo)
 
@@ -235,7 +253,7 @@ def test_ver_solicitud_vencida_queda_expirada(client, db_session):
 
 
 def test_registrar_resena_toma_los_datos_de_la_solicitud(client, db_session):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="valido@test.com", dni_cuit="20-10000015-5")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="valido@test.com", dni_cuit="20-10000015-7")
     codigo = _generar_solicitud(client, oferente_id)
 
     response = _registrar_resena(client, codigo)
@@ -254,7 +272,7 @@ def test_registrar_resena_codigo_invalido_400(client):
 
 
 def test_registrar_resena_codigo_ya_utilizado_400(client, db_session):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="reuso@test.com", dni_cuit="20-10000016-6")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="reuso@test.com", dni_cuit="20-10000016-5")
     codigo = _generar_solicitud(client, oferente_id)
 
     assert _registrar_resena(client, codigo).status_code == 201
@@ -262,17 +280,17 @@ def test_registrar_resena_codigo_ya_utilizado_400(client, db_session):
 
 
 def test_registrar_resena_con_enlace_vencido_400(client, db_session):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="expirado@test.com", dni_cuit="20-10000017-7")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="expirado@test.com", dni_cuit="20-10000017-3")
     codigo = _generar_solicitud(client, oferente_id)
     _vencer_solicitud(db_session, codigo)
 
     response = _registrar_resena(client, codigo)
     assert response.status_code == 400
-    assert "venció" in response.json()["detail"]
+    assert response.json()["detail"]["codigo"] == "enlace_vencido"
 
 
 def test_registrar_resena_criterio_faltante_422(client, db_session):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="faltante@test.com", dni_cuit="20-10000018-8")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="faltante@test.com", dni_cuit="20-10000018-1")
     codigo = _generar_solicitud(client, oferente_id)
 
     response = _registrar_resena(client, codigo, {"criterios": {"precio": 5, "calidad": 5, "atencion": 5}})
@@ -280,7 +298,7 @@ def test_registrar_resena_criterio_faltante_422(client, db_session):
 
 
 def test_registrar_resena_puntuacion_fuera_de_rango_422(client, db_session):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="rango@test.com", dni_cuit="20-10000019-9")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="rango@test.com", dni_cuit="20-10000020-3")
     codigo = _generar_solicitud(client, oferente_id)
 
     response = _registrar_resena(client, codigo, {"criterios": {"precio": 99, "calidad": 5, "atencion": 5, "puntualidad": 5}})
@@ -289,7 +307,7 @@ def test_registrar_resena_puntuacion_fuera_de_rango_422(client, db_session):
 
 def test_registrar_resena_media_estrella_ok(client, db_session):
     """0.5 es el mínimo válido y los pasos de media estrella se aceptan."""
-    _, oferente_id = crear_oferente_completo(client, db_session, email="media@test.com", dni_cuit="20-10000020-0")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="media@test.com", dni_cuit="20-10000020-3")
     codigo = _generar_solicitud(client, oferente_id)
 
     response = _registrar_resena(
@@ -310,7 +328,7 @@ def test_registrar_resena_paso_invalido_422(client, db_session):
 
 def test_registrar_resena_puntuacion_cero_422(client, db_session):
     """El mínimo es 0.5: no se puede puntuar con cero estrellas."""
-    _, oferente_id = crear_oferente_completo(client, db_session, email="cero@test.com", dni_cuit="20-10000022-2")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="cero@test.com", dni_cuit="20-10000023-8")
     codigo = _generar_solicitud(client, oferente_id)
 
     response = _registrar_resena(client, codigo, {"criterios": {"precio": 0, "calidad": 5, "atencion": 5, "puntualidad": 5}})
@@ -319,7 +337,7 @@ def test_registrar_resena_puntuacion_cero_422(client, db_session):
 
 def test_registrar_resena_sin_comentario_ok(client, db_session):
     """El comentario es opcional."""
-    _, oferente_id = crear_oferente_completo(client, db_session, email="sincom@test.com", dni_cuit="20-10000023-3")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="sincom@test.com", dni_cuit="20-10000023-8")
     codigo = _generar_solicitud(client, oferente_id)
 
     response = _registrar_resena(client, codigo, {"criterios": {"precio": 5, "calidad": 5, "atencion": 5, "puntualidad": 5}})
@@ -328,7 +346,7 @@ def test_registrar_resena_sin_comentario_ok(client, db_session):
 
 
 def test_registrar_resena_comentario_de_mas_de_200_caracteres_422(client, db_session):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="largo@test.com", dni_cuit="20-10000024-4")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="largo@test.com", dni_cuit="20-10000024-6")
     codigo = _generar_solicitud(client, oferente_id)
 
     response = _registrar_resena(
@@ -340,7 +358,7 @@ def test_registrar_resena_comentario_de_mas_de_200_caracteres_422(client, db_ses
 
 
 def test_registrar_resena_comentario_de_200_caracteres_ok(client, db_session):
-    _, oferente_id = crear_oferente_completo(client, db_session, email="justo@test.com", dni_cuit="20-10000025-5")
+    _, oferente_id = crear_oferente_completo(client, db_session, email="justo@test.com", dni_cuit="20-10000025-4")
     codigo = _generar_solicitud(client, oferente_id)
 
     response = _registrar_resena(
@@ -355,7 +373,7 @@ def test_registrar_resena_comentario_de_200_caracteres_ok(client, db_session):
 
 
 def test_moderar_resena_aceptar_ok(client, db_session):
-    token, oferente_id = crear_oferente_completo(client, db_session, email="aceptar@test.com", dni_cuit="20-10000026-6")
+    token, oferente_id = crear_oferente_completo(client, db_session, email="aceptar@test.com", dni_cuit="20-10000026-2")
     codigo = _generar_solicitud(client, oferente_id)
     resena_id = _registrar_resena(client, codigo).json()["id_resena"]
 
@@ -369,8 +387,8 @@ def test_moderar_resena_aceptar_ok(client, db_session):
 
 
 def test_moderar_resena_no_dueno_403(client, db_session):
-    token, oferente_id = crear_oferente_completo(client, db_session, email="modera1@test.com", dni_cuit="20-10000027-7")
-    token_otro, _ = crear_oferente_completo(client, db_session, email="modera2@test.com", dni_cuit="20-10000028-8")
+    token, oferente_id = crear_oferente_completo(client, db_session, email="modera1@test.com", dni_cuit="20-10000027-0")
+    token_otro, _ = crear_oferente_completo(client, db_session, email="modera2@test.com", dni_cuit="20-10000028-9")
     codigo = _generar_solicitud(client, oferente_id)
     resena_id = _registrar_resena(client, codigo).json()["id_resena"]
 
@@ -383,7 +401,7 @@ def test_moderar_resena_no_dueno_403(client, db_session):
 
 
 def test_moderar_resena_ya_moderada_400(client, db_session):
-    token, oferente_id = crear_oferente_completo(client, db_session, email="moderada@test.com", dni_cuit="20-10000029-9")
+    token, oferente_id = crear_oferente_completo(client, db_session, email="moderada@test.com", dni_cuit="20-10000029-7")
     codigo = _generar_solicitud(client, oferente_id)
     resena_id = _registrar_resena(client, codigo).json()["id_resena"]
 
@@ -407,13 +425,14 @@ def test_listar_resenas_publicas_solo_muestra_aceptadas(client, db_session):
 
     response = client.get(f"/api/v1/oferentes/{oferente_id}/resenas")
     assert response.status_code == 200
-    resultados = response.json()
+    resultados = response.json()["items"]
     assert len(resultados) == 1
-    assert resultados[0]["estado"] == "Aceptada"
+    assert resultados[0]["cliente"] == "Juan C."
+    assert "estado" not in resultados[0]
 
 
 def test_alerta_se_dispara_con_5_de_10_rechazos(client, db_session):
-    token, oferente_id = crear_oferente_completo(client, db_session, email="alerta@test.com", dni_cuit="20-10000031-1")
+    token, oferente_id = crear_oferente_completo(client, db_session, email="alerta@test.com", dni_cuit="20-10000031-9")
 
     resena_ids = [_registrar_resena(client, _generar_solicitud(client, oferente_id)).json()["id_resena"] for _ in range(10)]
 
@@ -430,7 +449,7 @@ def test_alerta_se_dispara_con_5_de_10_rechazos(client, db_session):
 
 
 def test_alerta_no_se_dispara_con_4_de_10_rechazos(client, db_session):
-    token, oferente_id = crear_oferente_completo(client, db_session, email="sinalerta@test.com", dni_cuit="20-10000032-2")
+    token, oferente_id = crear_oferente_completo(client, db_session, email="sinalerta@test.com", dni_cuit="20-10000032-7")
 
     resena_ids = [_registrar_resena(client, _generar_solicitud(client, oferente_id)).json()["id_resena"] for _ in range(10)]
 

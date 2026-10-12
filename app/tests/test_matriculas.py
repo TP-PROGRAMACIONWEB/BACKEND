@@ -2,7 +2,7 @@ import time
 from datetime import date, timedelta
 
 from app.models.matricula import EstadoReemplazo, Matricula, PadronMatricula, ResultadoValidacion, ValidacionMatricula
-from app.tests.conftest import PASSWORD, crear_admin_db, crear_categoria_db, registrar_y_loguear
+from app.tests.conftest import PASSWORD, crear_admin_db, crear_categoria_db, formulario_registro, registrar_y_loguear
 
 VENCIMIENTO_VIGENTE = date.today() + timedelta(days=365)
 
@@ -12,13 +12,7 @@ def crear_oferente(client, db_session, email: str, nombre: str, apellido: str, d
     categoria = crear_categoria_db(db_session, nombre=f"Categoria-{email}")
     respuesta = client.post(
         "/api/v1/oferentes",
-        json={
-            "nombre": nombre,
-            "apellido": apellido,
-            "dni_cuit": dni_cuit,
-            "telefono": "+54 3564 400000",
-            "categoria_id": categoria.id_categoria,
-        },
+        json=formulario_registro(categoria.id_categoria, dni_cuit=dni_cuit, nombre=f"{nombre} {apellido}"),
         headers={"Authorization": f"Bearer {token}"},
     )
     assert respuesta.status_code == 201, respuesta.text
@@ -53,7 +47,7 @@ def auth(token: str) -> dict:
 
 
 def test_numero_con_cantidad_de_digitos_incorrecta_da_422(client, db_session):
-    token, _ = crear_oferente(client, db_session, "gasista1@test.com", "Maria Clara", "Alessi", "20-11111111-1")
+    token, _ = crear_oferente(client, db_session, "gasista1@test.com", "Maria Clara", "Alessi", "20-11111111-2")
     respuesta = client.post(
         "/api/v1/oferentes/me/matriculas/validaciones",
         json={"tipo_profesional": "Gasista", "numero_matricula": "123"},
@@ -63,7 +57,7 @@ def test_numero_con_cantidad_de_digitos_incorrecta_da_422(client, db_session):
 
 
 def test_numero_con_letras_da_422(client, db_session):
-    token, _ = crear_oferente(client, db_session, "gasista2@test.com", "Maria Clara", "Alessi", "20-11111111-2")
+    token, _ = crear_oferente(client, db_session, "gasista2@test.com", "Maria Clara", "Alessi", "20-11111112-0")
     respuesta = client.post(
         "/api/v1/oferentes/me/matriculas/validaciones",
         json={"tipo_profesional": "Gasista", "numero_matricula": "10000A8919"},
@@ -73,7 +67,7 @@ def test_numero_con_letras_da_422(client, db_session):
 
 
 def test_tipo_invalido_da_422(client, db_session):
-    token, _ = crear_oferente(client, db_session, "gasista3@test.com", "Maria Clara", "Alessi", "20-11111111-3")
+    token, _ = crear_oferente(client, db_session, "gasista3@test.com", "Maria Clara", "Alessi", "20-11111113-9")
     respuesta = client.post(
         "/api/v1/oferentes/me/matriculas/validaciones",
         json={"tipo_profesional": "Plomero", "numero_matricula": "1000008919"},
@@ -84,7 +78,7 @@ def test_tipo_invalido_da_422(client, db_session):
 
 def test_matricula_existente_da_validada_y_marca_el_perfil_como_verificado(client, db_session):
     crear_fila_padron(db_session)
-    token, oferente_id = crear_oferente(client, db_session, "gasista4@test.com", "Maria Clara", "Alessi", "20-11111111-4")
+    token, oferente_id = crear_oferente(client, db_session, "gasista4@test.com", "Maria Clara", "Alessi", "20-11111114-7")
 
     respuesta = client.post(
         "/api/v1/oferentes/me/matriculas/validaciones",
@@ -101,7 +95,7 @@ def test_matricula_existente_da_validada_y_marca_el_perfil_como_verificado(clien
 
 
 def test_matricula_inexistente_da_no_encontrada(client, db_session):
-    token, _ = crear_oferente(client, db_session, "gasista5@test.com", "Maria Clara", "Alessi", "20-11111111-5")
+    token, _ = crear_oferente(client, db_session, "gasista5@test.com", "Maria Clara", "Alessi", "20-11111115-5")
     respuesta = client.post(
         "/api/v1/oferentes/me/matriculas/validaciones",
         json={"tipo_profesional": "Gasista", "numero_matricula": "1000000001"},
@@ -113,7 +107,7 @@ def test_matricula_inexistente_da_no_encontrada(client, db_session):
 
 def test_misma_matricula_ya_fidelizada_no_modifica_nada(client, db_session):
     crear_fila_padron(db_session)
-    token, _ = crear_oferente(client, db_session, "gasista6@test.com", "Maria Clara", "Alessi", "20-11111111-6")
+    token, _ = crear_oferente(client, db_session, "gasista6@test.com", "Maria Clara", "Alessi", "20-11111116-3")
     body = {"tipo_profesional": "Gasista", "numero_matricula": "1000008919"}
 
     client.post("/api/v1/oferentes/me/matriculas/validaciones", json=body, headers=auth(token))
@@ -123,7 +117,7 @@ def test_misma_matricula_ya_fidelizada_no_modifica_nada(client, db_session):
 
 def test_matricula_vencida_es_invalida(client, db_session):
     crear_fila_padron(db_session, vencimiento=date(2020, 1, 1))
-    token, _ = crear_oferente(client, db_session, "gasista7@test.com", "Maria Clara", "Alessi", "20-11111111-7")
+    token, _ = crear_oferente(client, db_session, "gasista7@test.com", "Maria Clara", "Alessi", "20-11111117-1")
     respuesta = client.post(
         "/api/v1/oferentes/me/matriculas/validaciones",
         json={"tipo_profesional": "Gasista", "numero_matricula": "1000008919"},
@@ -134,7 +128,7 @@ def test_matricula_vencida_es_invalida(client, db_session):
 
 def test_nombre_que_no_coincide_con_el_padron(client, db_session):
     crear_fila_padron(db_session, nombre="ALESSI MARIA CLARA")
-    token, _ = crear_oferente(client, db_session, "gasista8@test.com", "Pedro", "Rodriguez", "20-11111111-8")
+    token, _ = crear_oferente(client, db_session, "gasista8@test.com", "Pedro", "Rodriguez", "20-11111119-8")
     respuesta = client.post(
         "/api/v1/oferentes/me/matriculas/validaciones",
         json={"tipo_profesional": "Gasista", "numero_matricula": "1000008919"},
@@ -145,7 +139,7 @@ def test_nombre_que_no_coincide_con_el_padron(client, db_session):
 
 def test_nombre_con_error_de_tipeo_igual_matchea(client, db_session):
     crear_fila_padron(db_session, nombre="ALESSI MARIA CLARA")
-    token, _ = crear_oferente(client, db_session, "gasista9@test.com", "Maria Clara", "Alesi", "20-11111111-9")
+    token, _ = crear_oferente(client, db_session, "gasista9@test.com", "Maria Clara", "Alesi", "20-11111120-1")
     respuesta = client.post(
         "/api/v1/oferentes/me/matriculas/validaciones",
         json={"tipo_profesional": "Gasista", "numero_matricula": "1000008919"},
@@ -155,7 +149,7 @@ def test_nombre_con_error_de_tipeo_igual_matchea(client, db_session):
 
 
 def test_matricula_trampa_da_timeout_sin_demora_real(client, db_session):
-    token, _ = crear_oferente(client, db_session, "gasista10@test.com", "Maria Clara", "Alessi", "20-11111111-10")
+    token, _ = crear_oferente(client, db_session, "gasista10@test.com", "Maria Clara", "Alessi", "20-11111150-3")
     inicio = time.perf_counter()
     respuesta = client.post(
         "/api/v1/oferentes/me/matriculas/validaciones",
@@ -169,7 +163,7 @@ def test_matricula_trampa_da_timeout_sin_demora_real(client, db_session):
 
 def test_historial_incluye_todos_los_intentos_incluidos_los_fallidos(client, db_session):
     crear_fila_padron(db_session)
-    token, _ = crear_oferente(client, db_session, "gasista11@test.com", "Maria Clara", "Alessi", "20-11111111-11")
+    token, _ = crear_oferente(client, db_session, "gasista11@test.com", "Maria Clara", "Alessi", "20-11111151-1")
 
     client.post(
         "/api/v1/oferentes/me/matriculas/validaciones",
@@ -191,7 +185,7 @@ def test_historial_incluye_todos_los_intentos_incluidos_los_fallidos(client, db_
 def test_un_oferente_puede_fidelizar_dos_oficios_distintos(client, db_session):
     crear_fila_padron(db_session, tipo="Gasista", numero="1000008919", nombre="ALESSI MARIA CLARA")
     crear_fila_padron(db_session, tipo="Aire acondicionado", numero="10000089", nombre="ALESSI MARIA CLARA")
-    token, _ = crear_oferente(client, db_session, "gasista12@test.com", "Maria Clara", "Alessi", "20-11111111-12")
+    token, _ = crear_oferente(client, db_session, "gasista12@test.com", "Maria Clara", "Alessi", "20-11111153-8")
 
     r1 = client.post(
         "/api/v1/oferentes/me/matriculas/validaciones",
@@ -213,7 +207,7 @@ def test_un_oferente_puede_fidelizar_dos_oficios_distintos(client, db_session):
 def test_reemplazo_solicitado_no_cambia_la_matricula_vigente_y_avisa_al_admin(client, db_session):
     crear_fila_padron(db_session, numero="1000008919", nombre="ALESSI MARIA CLARA")
     crear_fila_padron(db_session, numero="1000004305", nombre="ALESSI MARIA CLARA")
-    token, _ = crear_oferente(client, db_session, "gasista13@test.com", "Maria Clara", "Alessi", "20-11111111-13")
+    token, _ = crear_oferente(client, db_session, "gasista13@test.com", "Maria Clara", "Alessi", "20-11111154-6")
     admin_token = login_admin(client, db_session, "admin13@test.com")
 
     client.post(
@@ -242,7 +236,7 @@ def test_reemplazo_solicitado_no_cambia_la_matricula_vigente_y_avisa_al_admin(cl
 def test_admin_autoriza_el_reemplazo_y_actualiza_la_matricula(client, db_session):
     crear_fila_padron(db_session, numero="1000008919", nombre="ALESSI MARIA CLARA")
     crear_fila_padron(db_session, numero="1000004305", nombre="ALESSI MARIA CLARA")
-    token, _ = crear_oferente(client, db_session, "gasista14@test.com", "Maria Clara", "Alessi", "20-11111111-14")
+    token, _ = crear_oferente(client, db_session, "gasista14@test.com", "Maria Clara", "Alessi", "20-11111155-4")
     admin_token = login_admin(client, db_session, "admin14@test.com")
 
     client.post(
@@ -281,7 +275,7 @@ def test_admin_autoriza_el_reemplazo_y_actualiza_la_matricula(client, db_session
 def test_admin_deniega_el_reemplazo_y_no_toca_la_matricula(client, db_session):
     crear_fila_padron(db_session, numero="1000008919", nombre="ALESSI MARIA CLARA")
     crear_fila_padron(db_session, numero="1000004305", nombre="ALESSI MARIA CLARA")
-    token, _ = crear_oferente(client, db_session, "gasista15@test.com", "Maria Clara", "Alessi", "20-11111111-15")
+    token, _ = crear_oferente(client, db_session, "gasista15@test.com", "Maria Clara", "Alessi", "20-11111156-2")
     admin_token = login_admin(client, db_session, "admin15@test.com")
 
     client.post(
@@ -308,10 +302,11 @@ def test_admin_deniega_el_reemplazo_y_no_toca_la_matricula(client, db_session):
     assert matriculas[0]["numero_matricula"] == "1000008919"
 
 
-def test_sin_perfil_de_oferente_da_404(client, db_session):
+def test_sin_perfil_de_oferente_da_403_registro_incompleto(client, db_session):
     token = registrar_y_loguear(client, "sinperfil@test.com")
     respuesta = client.get("/api/v1/oferentes/me/matriculas", headers=auth(token))
-    assert respuesta.status_code == 404
+    assert respuesta.status_code == 403
+    assert respuesta.json()["detail"]["codigo"] == "registro_incompleto"
 
 
 def test_requiere_autenticacion(client):
@@ -328,7 +323,7 @@ MENSAJE_CA04 = "Su matrícula no fue encontrada en el padrón, revise los datos 
 
 def test_los_mensajes_son_los_literales_de_los_criterios_de_aceptacion(client, db_session):
     crear_fila_padron(db_session)
-    token, _ = crear_oferente(client, db_session, "textos@test.com", "Maria Clara", "Alessi", "20-11111111-16")
+    token, _ = crear_oferente(client, db_session, "textos@test.com", "Maria Clara", "Alessi", "20-11111157-0")
     url = "/api/v1/oferentes/me/matriculas/validaciones"
 
     def validar(numero):
@@ -343,7 +338,7 @@ def test_los_mensajes_son_los_literales_de_los_criterios_de_aceptacion(client, d
 def test_vencida_y_nombre_no_coincide_muestran_el_texto_del_ca04_pero_guardan_el_motivo(client, db_session):
     crear_fila_padron(db_session, numero="1000008919", vencimiento=date(2020, 1, 1))
     crear_fila_padron(db_session, numero="1000004305", nombre="ROMERO TATIANA")
-    token, _ = crear_oferente(client, db_session, "ca04@test.com", "Maria Clara", "Alessi", "20-11111111-17")
+    token, _ = crear_oferente(client, db_session, "ca04@test.com", "Maria Clara", "Alessi", "20-11111158-9")
     url = "/api/v1/oferentes/me/matriculas/validaciones"
 
     vencida = client.post(url, json={"tipo_profesional": "Gasista", "numero_matricula": "1000008919"}, headers=auth(token)).json()
@@ -362,7 +357,7 @@ def test_vencida_y_nombre_no_coincide_muestran_el_texto_del_ca04_pero_guardan_el
 def test_un_reemplazo_pisado_cierra_la_notificacion_del_admin(client, db_session):
     for numero in ("1000008919", "1000004305", "1000002233"):
         crear_fila_padron(db_session, numero=numero)
-    token, _ = crear_oferente(client, db_session, "pisado@test.com", "Maria Clara", "Alessi", "20-11111111-18")
+    token, _ = crear_oferente(client, db_session, "pisado@test.com", "Maria Clara", "Alessi", "20-11111159-7")
     admin_token = login_admin(client, db_session, "adminpisado@test.com")
     url = "/api/v1/oferentes/me/matriculas/validaciones"
 
