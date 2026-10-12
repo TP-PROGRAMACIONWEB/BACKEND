@@ -28,9 +28,30 @@ class UsuarioOut(UsuarioBase):
     id_usuario: int
     rol: RolUsuario
     estado_cuenta: str
+    fidelizado: bool = Field(default=False, description="HU-02: true si fidelizó al menos una matrícula.")
     fecha_registro: datetime
 
 
+<<<<<<< Updated upstream
+=======
+class PerfilOut(BaseModel):
+    """HU-03 / CA02: lo único que se ve al volver del login. Nada de datos del
+    perfil de Oferente — esa es otra HU."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id_usuario: int
+    email: EmailStr
+    nombre: str | None = Field(default=None, description="Viene de Google. Vacío para cuentas que solo usaron email/password.")
+    rol: RolUsuario
+    requiere_registro: bool = Field(
+        default=False,
+        description="true si es Oferente y todavía no completó el formulario de Profesional. El frontend lo manda a /registro.",
+    )
+    fidelizado: bool = Field(default=False, description="HU-02: true si fidelizó al menos una matrícula.")
+
+
+>>>>>>> Stashed changes
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"

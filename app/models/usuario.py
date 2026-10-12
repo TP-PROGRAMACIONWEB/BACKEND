@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import Column, DateTime, Enum, Integer, String, func
+from sqlalchemy import Boolean, Column, DateTime, Enum, Integer, String, false, func
 from sqlalchemy.orm import relationship
 
 from app.db.database import Base
@@ -35,6 +35,10 @@ class Usuario(Base):
         default=RolUsuario.OFERENTE,
     )
     estado_cuenta = Column(String(50), nullable=False, default=EstadoCuenta.ACTIVA)
+    # HU-02 / CA08: pasa a True cuando el usuario fideliza su primera matrícula
+    # contra el padrón. La relación matrícula-usuario queda en `matriculas`
+    # (`oferente_id` es el mismo `id_usuario`, por la PK compartida).
+    fidelizado = Column(Boolean, nullable=False, default=False, server_default=false())
     fecha_registro = Column(DateTime(timezone=True), server_default=func.now())
 
     oferente = relationship("Oferente", back_populates="usuario", uselist=False)

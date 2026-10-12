@@ -153,10 +153,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Palabra clave: nombre o apellido",
+              "description": "Palabra clave: parte del nombre",
               "title": "Q"
             },
-            "description": "Palabra clave: nombre o apellido"
+            "description": "Palabra clave: parte del nombre"
           },
           {
             "name": "categoria_id",
@@ -972,7 +972,11 @@
           "Matrículas"
         ],
         "summary": "Validar (fidelizar) una matrícula profesional contra el padrón",
+<<<<<<< Updated upstream
         "description": "HU-02 — El Profesional logueado carga tipo y número; la validación es\n**síncrona**, contra el padrón cargado en la base (con timeout de\n`settings.matricula_timeout_segundos`, simulado con la matrícula trampa).\nDevuelve un código de `resultado` con su mensaje; el frontend lo renderiza.",
+=======
+        "description": "HU-02 — El Profesional logueado carga tipo y número; la validación es\n**síncrona**, contra el padrón cargado en la base. Devuelve un código de\n`resultado` con su mensaje; el frontend lo renderiza.\n\n**CA03:** si la consulta al padrón no responde en\n`MATRICULA_TIMEOUT_SEGUNDOS` (60 por defecto), el resultado es `Timeout`.\n**Para QA:** la matrícula trampa —`9999999999` para Gasista, `99999999`\npara Aire acondicionado— simula un padrón que no responde, así que la\nrespuesta `Timeout` llega recién al cumplirse ese tiempo.",
+>>>>>>> Stashed changes
         "operationId": "crear_validacion_api_v1_oferentes_me_matriculas_validaciones_post",
         "requestBody": {
           "content": {
@@ -1003,6 +1007,40 @@
           },
           "422": {
             "description": "Tipo inválido, o el número no tiene la cantidad de dígitos exigida"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/oferentes/me/matriculas/tipos": {
+      "get": {
+        "tags": [
+          "Matrículas"
+        ],
+        "summary": "Tipos de profesional que se pueden fidelizar y los dígitos de su matrícula",
+        "description": "HU-02 / CA01 — Alimenta el selector \"Tipo de profesional\", en orden\nalfabético (la primera opción es la que viene por defecto), y el label\n\"Debe ingresar X dígitos\" del número de matrícula.",
+        "operationId": "listar_tipos_api_v1_oferentes_me_matriculas_tipos_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TipoMatriculaOut"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Tipos Api V1 Oferentes Me Matriculas Tipos Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
           }
         },
         "security": [
@@ -1404,6 +1442,183 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cron/padrones/sync": {
+      "post": {
+        "tags": [
+          "Cron Padrones"
+        ],
+        "summary": "Sync de padrones para cron-job.org",
+        "operationId": "sync_api_v1_cron_padrones_sync_post",
+        "parameters": [
+          {
+            "name": "secret",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Igual a CRON_SECRET en Vercel",
+              "title": "Secret"
+            },
+            "description": "Igual a CRON_SECRET en Vercel"
+          },
+          {
+            "name": "fuente",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "local|gasnea|cacaav|camtrec|ecogas|todas",
+              "default": "local",
+              "title": "Fuente"
+            },
+            "description": "local|gasnea|cacaav|camtrec|ecogas|todas"
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "True = solo reporte, no escribe",
+              "default": true,
+              "title": "Dry Run"
+            },
+            "description": "True = solo reporte, no escribe"
+          },
+          {
+            "name": "paginas",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5,
+              "minimum": 1,
+              "description": "Páginas por scraper web (límite serverless)",
+              "default": 1,
+              "title": "Paginas"
+            },
+            "description": "Páginas por scraper web (límite serverless)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Cron Padrones"
+        ],
+        "summary": "Sync de padrones para cron-job.org",
+        "operationId": "sync_api_v1_cron_padrones_sync_get",
+        "parameters": [
+          {
+            "name": "secret",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Igual a CRON_SECRET en Vercel",
+              "title": "Secret"
+            },
+            "description": "Igual a CRON_SECRET en Vercel"
+          },
+          {
+            "name": "fuente",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "local|gasnea|cacaav|camtrec|ecogas|todas",
+              "default": "local",
+              "title": "Fuente"
+            },
+            "description": "local|gasnea|cacaav|camtrec|ecogas|todas"
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "True = solo reporte, no escribe",
+              "default": true,
+              "title": "Dry Run"
+            },
+            "description": "True = solo reporte, no escribe"
+          },
+          {
+            "name": "paginas",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5,
+              "minimum": 1,
+              "description": "Páginas por scraper web (límite serverless)",
+              "default": 1,
+              "title": "Paginas"
+            },
+            "description": "Páginas por scraper web (límite serverless)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cron/padrones/health": {
+      "get": {
+        "tags": [
+          "Cron Padrones"
+        ],
+        "summary": "Chequeo cron",
+        "operationId": "cron_health_api_v1_cron_padrones_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }
@@ -2183,7 +2398,13 @@
           "nombre": {
             "anyOf": [
               {
+<<<<<<< Updated upstream
                 "type": "string"
+=======
+                "type": "string",
+                "maxLength": 150,
+                "minLength": 2
+>>>>>>> Stashed changes
               },
               {
                 "type": "null"
@@ -2191,6 +2412,7 @@
             ],
             "title": "Nombre"
           },
+<<<<<<< Updated upstream
           "apellido": {
             "anyOf": [
               {
@@ -2202,6 +2424,8 @@
             ],
             "title": "Apellido"
           },
+=======
+>>>>>>> Stashed changes
           "telefono": {
             "anyOf": [
               {
@@ -2322,10 +2546,669 @@
               }
             ],
             "title": "Descripcion"
+<<<<<<< Updated upstream
           }
         },
         "type": "object",
         "title": "OferenteUpdate"
+=======
+          },
+          "latitud": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitud"
+          },
+          "longitud": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitud"
+          },
+          "radio_cobertura_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radio Cobertura Km"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "OferenteEdicion",
+        "description": "Body de `PUT /api/v1/oferentes/me` (caso A33, D18). Todo opcional y sin\nDNI/CUIT: ese dato no se cambia después del registro."
+      },
+      "OferentePrivadoOut": {
+        "properties": {
+          "id_oferente": {
+            "type": "integer",
+            "title": "Id Oferente"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "categoria_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria Id"
+          },
+          "categoria": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoriaRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "especialidad": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Especialidad"
+          },
+          "experiencia": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExperienciaRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "telefono": {
+            "type": "string",
+            "title": "Telefono"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email",
+            "description": "El mismo correo con el que el Profesional entra (D6). Es público por D7."
+          },
+          "dias_atencion": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Dias Atencion"
+          },
+          "hora_inicio_atencion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora Inicio Atencion"
+          },
+          "hora_fin_atencion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora Fin Atencion"
+          },
+          "disponible_emergencia": {
+            "type": "boolean",
+            "title": "Disponible Emergencia"
+          },
+          "info_guardia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Info Guardia"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "latitud": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitud"
+          },
+          "longitud": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitud"
+          },
+          "radio_cobertura_km": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radio Cobertura Km"
+          },
+          "promedio_calificacion": {
+            "type": "string",
+            "title": "Promedio Calificacion"
+          },
+          "cantidad_resenas": {
+            "type": "integer",
+            "title": "Cantidad Resenas",
+            "description": "Reseñas aceptadas. Es el contador de la pestaña Opiniones."
+          },
+          "cantidad_trabajos": {
+            "type": "integer",
+            "title": "Cantidad Trabajos",
+            "description": "Trabajos realizados cargados. Con 5, el frontend oculta el alta."
+          },
+          "tiene_matricula_validada": {
+            "type": "boolean",
+            "title": "Tiene Matricula Validada",
+            "description": "HU-02: true con al menos una matrícula fidelizada.",
+            "default": false
+          },
+          "matriculas": {
+            "items": {
+              "$ref": "#/components/schemas/MatriculaRef"
+            },
+            "type": "array",
+            "title": "Matriculas"
+          },
+          "foto_perfil_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Foto Perfil Url"
+          },
+          "portada_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portada Url"
+          },
+          "dni_cuit": {
+            "type": "string",
+            "title": "Dni Cuit"
+          },
+          "estado_verificacion": {
+            "type": "string",
+            "title": "Estado Verificacion"
+          },
+          "cantidad_rechazos_acumulados": {
+            "type": "integer",
+            "title": "Cantidad Rechazos Acumulados",
+            "description": "Dato interno de moderación; no se expone al público."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_oferente",
+          "nombre",
+          "telefono",
+          "email",
+          "disponible_emergencia",
+          "promedio_calificacion",
+          "cantidad_resenas",
+          "cantidad_trabajos",
+          "dni_cuit",
+          "estado_verificacion",
+          "cantidad_rechazos_acumulados"
+        ],
+        "title": "OferentePrivadoOut",
+        "description": "Perfil del dueño (`GET /oferentes/me`): suma lo que nadie más ve."
+      },
+      "OferentePublicoOut": {
+        "properties": {
+          "id_oferente": {
+            "type": "integer",
+            "title": "Id Oferente"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "categoria_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria Id"
+          },
+          "categoria": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoriaRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "especialidad": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Especialidad"
+          },
+          "experiencia": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExperienciaRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "telefono": {
+            "type": "string",
+            "title": "Telefono"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email",
+            "description": "El mismo correo con el que el Profesional entra (D6). Es público por D7."
+          },
+          "dias_atencion": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Dias Atencion"
+          },
+          "hora_inicio_atencion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora Inicio Atencion"
+          },
+          "hora_fin_atencion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora Fin Atencion"
+          },
+          "disponible_emergencia": {
+            "type": "boolean",
+            "title": "Disponible Emergencia"
+          },
+          "info_guardia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Info Guardia"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "latitud": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitud"
+          },
+          "longitud": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitud"
+          },
+          "radio_cobertura_km": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radio Cobertura Km"
+          },
+          "promedio_calificacion": {
+            "type": "string",
+            "title": "Promedio Calificacion"
+          },
+          "cantidad_resenas": {
+            "type": "integer",
+            "title": "Cantidad Resenas",
+            "description": "Reseñas aceptadas. Es el contador de la pestaña Opiniones."
+          },
+          "cantidad_trabajos": {
+            "type": "integer",
+            "title": "Cantidad Trabajos",
+            "description": "Trabajos realizados cargados. Con 5, el frontend oculta el alta."
+          },
+          "tiene_matricula_validada": {
+            "type": "boolean",
+            "title": "Tiene Matricula Validada",
+            "description": "HU-02: true con al menos una matrícula fidelizada.",
+            "default": false
+          },
+          "matriculas": {
+            "items": {
+              "$ref": "#/components/schemas/MatriculaRef"
+            },
+            "type": "array",
+            "title": "Matriculas"
+          },
+          "foto_perfil_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Foto Perfil Url"
+          },
+          "portada_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portada Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_oferente",
+          "nombre",
+          "telefono",
+          "email",
+          "disponible_emergencia",
+          "promedio_calificacion",
+          "cantidad_resenas",
+          "cantidad_trabajos"
+        ],
+        "title": "OferentePublicoOut",
+        "description": "Perfil público (CA04, D7): todo menos DNI/CUIT, estado de verificación y\nrechazos acumulados. Las horas van como \"HH:MM\"."
+      },
+      "OferenteRegistro": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 2,
+            "title": "Nombre",
+            "description": "Nombre y apellido, o razón social. Un solo campo."
+          },
+          "telefono": {
+            "type": "string",
+            "title": "Telefono",
+            "description": "10 dígitos con guion opcional. Sin 0, 15 ni +54."
+          },
+          "categoria_id": {
+            "type": "integer",
+            "title": "Categoria Id",
+            "description": "Categoría u oficio principal, activa."
+          },
+          "especialidad": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Especialidad"
+          },
+          "experiencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiencia"
+          },
+          "dias_atencion": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Dias Atencion",
+            "description": "Días ISO: 1 = lunes … 7 = domingo. Al menos uno."
+          },
+          "hora_inicio_atencion": {
+            "type": "string",
+            "format": "time",
+            "title": "Hora Inicio Atencion",
+            "description": "HH:MM, minutos 00 o 30."
+          },
+          "hora_fin_atencion": {
+            "type": "string",
+            "format": "time",
+            "title": "Hora Fin Atencion",
+            "description": "HH:MM, minutos 00 o 30, posterior a la apertura."
+          },
+          "disponible_emergencia": {
+            "type": "boolean",
+            "title": "Disponible Emergencia",
+            "default": false
+          },
+          "info_guardia": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Info Guardia"
+          },
+          "dni_cuit": {
+            "type": "string",
+            "title": "Dni Cuit",
+            "description": "7 u 8 dígitos (DNI) o 11 con dígito verificador (CUIT). Guiones y puntos opcionales."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nombre",
+          "telefono",
+          "categoria_id",
+          "dias_atencion",
+          "hora_inicio_atencion",
+          "hora_fin_atencion",
+          "dni_cuit"
+        ],
+        "title": "OferenteRegistro",
+        "description": "Body de `POST /api/v1/oferentes` (HU-04, CA02 y CA03).",
+        "example": {
+          "categoria_id": 1,
+          "dias_atencion": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "disponible_emergencia": true,
+          "dni_cuit": "27-30111222-6",
+          "especialidad": "Instalaciones domiciliarias",
+          "experiencia": "3_A_5",
+          "hora_fin_atencion": "18:00",
+          "hora_inicio_atencion": "08:00",
+          "info_guardia": "Atiendo urgencias de lunes a sábado hasta las 22 h.",
+          "nombre": "Serena Ludueña",
+          "telefono": "3564-400111"
+        }
+      },
+      "PerfilOut": {
+        "properties": {
+          "id_usuario": {
+            "type": "integer",
+            "title": "Id Usuario"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "nombre": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nombre",
+            "description": "Viene de Google. Vacío para cuentas que solo usaron email/password."
+          },
+          "rol": {
+            "$ref": "#/components/schemas/RolUsuario"
+          },
+          "requiere_registro": {
+            "type": "boolean",
+            "title": "Requiere Registro",
+            "description": "true si es Oferente y todavía no completó el formulario de Profesional. El frontend lo manda a /registro.",
+            "default": false
+          },
+          "fidelizado": {
+            "type": "boolean",
+            "title": "Fidelizado",
+            "description": "HU-02: true si fidelizó al menos una matrícula.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_usuario",
+          "email",
+          "rol"
+        ],
+        "title": "PerfilOut",
+        "description": "HU-03 / CA02: lo único que se ve al volver del login. Nada de datos del\nperfil de Oferente — esa es otra HU."
+>>>>>>> Stashed changes
       },
       "ReemplazoResolucionIn": {
         "properties": {
@@ -2832,6 +3715,95 @@
           "vencida": false
         }
       },
+<<<<<<< Updated upstream
+=======
+      "SubidaIn": {
+        "properties": {
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "Perfil",
+              "Portada",
+              "Trabajo"
+            ],
+            "title": "Tipo"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type",
+            "description": "image/jpeg o image/png."
+          },
+          "tamano_bytes": {
+            "type": "integer",
+            "title": "Tamano Bytes",
+            "description": "Tamaño del archivo en bytes. Máximo 5 MB."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tipo",
+          "content_type",
+          "tamano_bytes"
+        ],
+        "title": "SubidaIn",
+        "description": "Paso 1 de la subida: el navegador declara qué va a subir. Lo que cuenta\nal confirmar es lo que reporta Storage, no esto.",
+        "example": {
+          "content_type": "image/jpeg",
+          "tamano_bytes": 1048576,
+          "tipo": "Perfil"
+        }
+      },
+      "SubidaOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "Clave del objeto en el bucket. Se devuelve al confirmar."
+          },
+          "upload_url": {
+            "type": "string",
+            "title": "Upload Url",
+            "description": "URL firmada a la que se hace el PUT del archivo."
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "upload_url",
+          "tipo",
+          "content_type"
+        ],
+        "title": "SubidaOut"
+      },
+      "TipoMatriculaOut": {
+        "properties": {
+          "tipo_profesional": {
+            "type": "string",
+            "title": "Tipo Profesional"
+          },
+          "digitos": {
+            "type": "integer",
+            "title": "Digitos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo_profesional",
+          "digitos"
+        ],
+        "title": "TipoMatriculaOut",
+        "description": "Una opción del selector \"Tipo de profesional\", con la cantidad de\ndígitos que exige su número de matrícula."
+      },
+>>>>>>> Stashed changes
       "Token": {
         "properties": {
           "access_token": {
@@ -2913,6 +3885,12 @@
           "estado_cuenta": {
             "type": "string",
             "title": "Estado Cuenta"
+          },
+          "fidelizado": {
+            "type": "boolean",
+            "title": "Fidelizado",
+            "description": "HU-02: true si fidelizó al menos una matrícula.",
+            "default": false
           },
           "fecha_registro": {
             "type": "string",

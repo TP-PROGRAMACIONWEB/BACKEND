@@ -25,9 +25,17 @@ class ValidacionMatriculaIn(BaseModel):
             raise ValueError("El número de matrícula solo puede tener dígitos")
         esperados = DIGITOS_POR_TIPO[self.tipo_profesional]
         if len(numero) != esperados:
-            raise ValueError(f"El número de matrícula de {self.tipo_profesional} debe tener {esperados} dígitos")
+            raise ValueError(f"Debe ingresar {esperados} dígitos")
         self.numero_matricula = numero
         return self
+
+
+class TipoMatriculaOut(BaseModel):
+    """Una opción del selector "Tipo de profesional", con la cantidad de
+    dígitos que exige su número de matrícula."""
+
+    tipo_profesional: str
+    digitos: int
 
 
 class MatriculaOut(BaseModel):

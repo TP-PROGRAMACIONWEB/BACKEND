@@ -12,6 +12,7 @@ from app.models.usuario import RolUsuario, Usuario
 from app.services.email import EmailServiceFake, get_email_service
 
 TEST_DATABASE_URL = "sqlite://"
+TIMEOUT_MATRICULA_TEST = 0.3
 
 engine = create_engine(
     TEST_DATABASE_URL,
@@ -43,6 +44,19 @@ def client(db_session, emails):
     def override_get_db():
         yield db_session
 
+<<<<<<< Updated upstream
+=======
+    # El login con Google se prueba con settings.auth0_habilitado en True: los
+    # tests que verifican el 503 lo desactivan explícitamente con monkeypatch.
+    monkeypatch.setattr(settings, "auth0_domain", "offix-test.us.auth0.com")
+    monkeypatch.setattr(settings, "auth0_client_id", "client-id-test")
+    monkeypatch.setattr(settings, "auth0_client_secret", "client-secret-test")
+
+    # CA03 de HU-02: el límite real es de 60 s; acá se acorta para que los
+    # tests que usan la matrícula trampa no tarden un minuto.
+    monkeypatch.setattr(settings, "matricula_timeout_segundos", TIMEOUT_MATRICULA_TEST)
+
+>>>>>>> Stashed changes
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_email_service] = lambda: emails
     # El evento de startup real de la app corre create_all contra el engine de

@@ -1,8 +1,22 @@
 import time
 from datetime import date, timedelta
 
+from app.core.config import settings
 from app.models.matricula import EstadoReemplazo, Matricula, PadronMatricula, ResultadoValidacion, ValidacionMatricula
+<<<<<<< Updated upstream
 from app.tests.conftest import PASSWORD, crear_admin_db, crear_categoria_db, registrar_y_loguear
+=======
+from app.models.usuario import Usuario
+from app.services import matriculas as servicio_matriculas
+from app.tests.conftest import (
+    PASSWORD,
+    TIMEOUT_MATRICULA_TEST,
+    crear_admin_db,
+    crear_categoria_db,
+    formulario_registro,
+    registrar_y_loguear,
+)
+>>>>>>> Stashed changes
 
 VENCIMIENTO_VIGENTE = date.today() + timedelta(days=365)
 
@@ -154,8 +168,13 @@ def test_nombre_con_error_de_tipeo_igual_matchea(client, db_session):
     assert respuesta.json()["resultado"] == "Validada"
 
 
+<<<<<<< Updated upstream
 def test_matricula_trampa_da_timeout_sin_demora_real(client, db_session):
     token, _ = crear_oferente(client, db_session, "gasista10@test.com", "Maria Clara", "Alessi", "20-11111111-10")
+=======
+def test_matricula_trampa_da_timeout_recien_al_vencer_el_limite(client, db_session):
+    token, _ = crear_oferente(client, db_session, "gasista10@test.com", "Maria Clara", "Alessi", "20-11111150-3")
+>>>>>>> Stashed changes
     inicio = time.perf_counter()
     respuesta = client.post(
         "/api/v1/oferentes/me/matriculas/validaciones",
@@ -163,8 +182,68 @@ def test_matricula_trampa_da_timeout_sin_demora_real(client, db_session):
         headers=auth(token),
     )
     duracion = time.perf_counter() - inicio
+    assert respuesta.status_code == 200, respuesta.text
     assert respuesta.json()["resultado"] == "Timeout"
-    assert duracion < 2
+    assert TIMEOUT_MATRICULA_TEST <= duracion < TIMEOUT_MATRICULA_TEST + 2
+
+
+def test_una_consulta_normal_responde_antes_del_limite(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "matricula_timeout_segundos", 30)
+    crear_fila_padron(db_session)
+    token, _ = crear_oferente(client, db_session, "rapida@test.com", "Maria Clara", "Alessi", "20-22222201-0")
+    inicio = time.perf_counter()
+    respuesta = client.post(
+        "/api/v1/oferentes/me/matriculas/validaciones",
+        json={"tipo_profesional": "Gasista", "numero_matricula": "1000008919"},
+        headers=auth(token),
+    )
+    assert respuesta.json()["resultado"] == "Validada"
+    assert time.perf_counter() - inicio < 5
+
+
+def test_padron_que_no_responde_da_timeout_con_cualquier_matricula(client, db_session, monkeypatch):
+    """El límite aplica a toda consulta, no solo a la matrícula trampa."""
+    crear_fila_padron(db_session)
+    token, _ = crear_oferente(client, db_session, "lento@test.com", "Maria Clara", "Alessi", "20-22222202-9")
+
+    def padron_colgado(bind, tipo_profesional, numero_matricula, cancelar):
+        cancelar.wait()
+
+    monkeypatch.setattr(servicio_matriculas, "_consultar_padron", padron_colgado)
+    respuesta = client.post(
+        "/api/v1/oferentes/me/matriculas/validaciones",
+        json={"tipo_profesional": "Gasista", "numero_matricula": "1000008919"},
+        headers=auth(token),
+    )
+    assert respuesta.json()["resultado"] == "Timeout"
+    assert respuesta.json()["matricula"] is None
+
+
+def test_con_la_trampa_deshabilitada_el_numero_trampa_no_existe_en_el_padron(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "matricula_trap_habilitada", False)
+    token, _ = crear_oferente(client, db_session, "sintrampa@test.com", "Maria Clara", "Alessi", "20-22222203-7")
+    respuesta = client.post(
+        "/api/v1/oferentes/me/matriculas/validaciones",
+        json={"tipo_profesional": "Gasista", "numero_matricula": "9999999999"},
+        headers=auth(token),
+    )
+    assert respuesta.json()["resultado"] == "No_Encontrada"
+
+
+def test_despues_de_un_timeout_se_puede_reintentar(client, db_session):
+    crear_fila_padron(db_session)
+    token, oferente_id = crear_oferente(client, db_session, "reintento@test.com", "Maria Clara", "Alessi", "20-22222204-5")
+    url = "/api/v1/oferentes/me/matriculas/validaciones"
+
+    timeout = client.post(url, json={"tipo_profesional": "Gasista", "numero_matricula": "9999999999"}, headers=auth(token))
+    assert timeout.json()["resultado"] == "Timeout"
+    assert client.get(f"/api/v1/oferentes/{oferente_id}").json()["tiene_matricula_validada"] is False
+
+    reintento = client.post(url, json={"tipo_profesional": "Gasista", "numero_matricula": "1000008919"}, headers=auth(token))
+    assert reintento.json()["resultado"] == "Validada"
+
+    historial = client.get(url, headers=auth(token)).json()
+    assert [fila["resultado"] for fila in historial] == ["Validada", "Timeout"]
 
 
 def test_historial_incluye_todos_los_intentos_incluidos_los_fallidos(client, db_session):
@@ -319,3 +398,185 @@ def test_requiere_autenticacion(client):
         "/api/v1/oferentes/me/matriculas/validaciones", json={"tipo_profesional": "Gasista", "numero_matricula": "1000008919"}
     )
     assert respuesta.status_code == 401
+<<<<<<< Updated upstream
+=======
+
+
+# --- Textos de los criterios de aceptación ------------------------------------
+
+MENSAJE_CA04 = "Su matrícula no fue encontrada en el padrón, revise los datos y vuelva a intentarlo"
+
+
+def test_los_mensajes_son_los_literales_de_los_criterios_de_aceptacion(client, db_session):
+    crear_fila_padron(db_session)
+    token, _ = crear_oferente(client, db_session, "textos@test.com", "Maria Clara", "Alessi", "20-11111157-0")
+    url = "/api/v1/oferentes/me/matriculas/validaciones"
+
+    def validar(numero):
+        return client.post(url, json={"tipo_profesional": "Gasista", "numero_matricula": numero}, headers=auth(token)).json()
+
+    assert validar("1000000001")["mensaje"] == MENSAJE_CA04
+    assert validar("9999999999")["mensaje"] == "No pudimos procesar tu validación en este momento, intentá nuevamente más tarde"
+    assert validar("1000008919")["mensaje"] == "Su matrícula fue fidelizada exitosamente"
+    assert validar("1000008919")["mensaje"] == "Su matrícula ya fue fidelizada"
+
+
+def test_vencida_y_nombre_no_coincide_muestran_el_texto_del_ca04_pero_guardan_el_motivo(client, db_session):
+    crear_fila_padron(db_session, numero="1000008919", vencimiento=date(2020, 1, 1))
+    crear_fila_padron(db_session, numero="1000004305", nombre="ROMERO TATIANA")
+    token, _ = crear_oferente(client, db_session, "ca04@test.com", "Maria Clara", "Alessi", "20-11111158-9")
+    url = "/api/v1/oferentes/me/matriculas/validaciones"
+
+    vencida = client.post(url, json={"tipo_profesional": "Gasista", "numero_matricula": "1000008919"}, headers=auth(token)).json()
+    otro_nombre = client.post(url, json={"tipo_profesional": "Gasista", "numero_matricula": "1000004305"}, headers=auth(token)).json()
+
+    assert vencida["resultado"] == "Vencida" and vencida["mensaje"] == MENSAJE_CA04
+    assert otro_nombre["resultado"] == "Nombre_No_Coincide" and otro_nombre["mensaje"] == MENSAJE_CA04
+    # La notificación de la campana lleva el mismo texto.
+    mensajes = {n["mensaje"] for n in client.get("/api/v1/notificaciones", headers=auth(token)).json()}
+    assert mensajes == {MENSAJE_CA04}
+
+
+# --- Pedido de reemplazo pisado por uno más nuevo -----------------------------
+
+
+def test_un_reemplazo_pisado_cierra_la_notificacion_del_admin(client, db_session):
+    for numero in ("1000008919", "1000004305", "1000002233"):
+        crear_fila_padron(db_session, numero=numero)
+    token, _ = crear_oferente(client, db_session, "pisado@test.com", "Maria Clara", "Alessi", "20-11111159-7")
+    admin_token = login_admin(client, db_session, "adminpisado@test.com")
+    url = "/api/v1/oferentes/me/matriculas/validaciones"
+
+    for numero in ("1000008919", "1000004305", "1000002233"):
+        client.post(url, json={"tipo_profesional": "Gasista", "numero_matricula": numero}, headers=auth(token))
+
+    pedidos = [
+        n for n in client.get("/api/v1/notificaciones", headers=auth(admin_token)).json() if n["tipo"] == "Matricula_Reemplazo_Solicitado"
+    ]
+    estados = {n["numero_matricula_solicitada"]: n["estado"] for n in pedidos}
+    assert estados == {"1000004305": "Leida", "1000002233": "Pendiente"}
+    # El contador del Administrador solo cuenta el pedido vigente.
+    assert client.get("/api/v1/notificaciones/contador", headers=auth(admin_token)).json()["pendientes_de_accion"] == 1
+
+    pisado_id = next(n["validacion_matricula_id"] for n in pedidos if n["numero_matricula_solicitada"] == "1000004305")
+    respuesta = client.patch(f"/api/v1/admin/matriculas/reemplazos/{pisado_id}", json={"autorizar": True}, headers=auth(admin_token))
+    assert respuesta.status_code == 400
+    assert "más nuevo" in respuesta.json()["detail"]
+
+
+# --- CA08: campo Fidelizado y tabla intermedia --------------------------------
+
+
+def _perfil(client, token: str) -> dict:
+    return client.get("/api/v1/auth/me", headers=auth(token)).json()
+
+
+def test_fidelizado_arranca_en_falso_y_pasa_a_verdadero_al_validar(client, db_session):
+    crear_fila_padron(db_session)
+    token, oferente_id = crear_oferente(client, db_session, "bit1@test.com", "Maria Clara", "Alessi", "20-22222205-3")
+    assert _perfil(client, token)["fidelizado"] is False
+    assert db_session.query(Matricula).count() == 0
+
+    client.post(
+        "/api/v1/oferentes/me/matriculas/validaciones",
+        json={"tipo_profesional": "Gasista", "numero_matricula": "1000008919"},
+        headers=auth(token),
+    )
+
+    assert _perfil(client, token)["fidelizado"] is True
+    assert db_session.get(Usuario, oferente_id).fidelizado is True
+    # La tabla intermedia: una fila que une al usuario con su matrícula.
+    fila = db_session.query(Matricula).one()
+    assert (fila.oferente_id, fila.tipo_profesional, fila.numero_matricula) == (oferente_id, "Gasista", "1000008919")
+
+
+def test_un_intento_fallido_no_fideliza_ni_toca_la_tabla_intermedia(client, db_session):
+    crear_fila_padron(db_session, numero="1000008919", vencimiento=date(2020, 1, 1))
+    crear_fila_padron(db_session, numero="1000004305", nombre="ROMERO TATIANA")
+    token, oferente_id = crear_oferente(client, db_session, "bit2@test.com", "Maria Clara", "Alessi", "20-22222206-1")
+    url = "/api/v1/oferentes/me/matriculas/validaciones"
+
+    esperados = {
+        "1000000001": "No_Encontrada",
+        "9999999999": "Timeout",
+        "1000008919": "Vencida",
+        "1000004305": "Nombre_No_Coincide",
+    }
+    for numero, resultado in esperados.items():
+        respuesta = client.post(url, json={"tipo_profesional": "Gasista", "numero_matricula": numero}, headers=auth(token))
+        assert respuesta.json()["resultado"] == resultado
+
+    assert _perfil(client, token)["fidelizado"] is False
+    assert db_session.query(Matricula).count() == 0
+    assert client.get(f"/api/v1/oferentes/{oferente_id}").json()["tiene_matricula_validada"] is False
+
+
+def test_revalidar_la_misma_matricula_no_modifica_el_perfil(client, db_session):
+    crear_fila_padron(db_session)
+    token, oferente_id = crear_oferente(client, db_session, "bit3@test.com", "Maria Clara", "Alessi", "20-22222222-3")
+    body = {"tipo_profesional": "Gasista", "numero_matricula": "1000008919"}
+    url = "/api/v1/oferentes/me/matriculas/validaciones"
+
+    client.post(url, json=body, headers=auth(token))
+    antes = client.get("/api/v1/oferentes/me/matriculas", headers=auth(token)).json()
+    perfil_antes = client.get(f"/api/v1/oferentes/{oferente_id}").json()
+
+    assert client.post(url, json=body, headers=auth(token)).json()["resultado"] == "Ya_Fidelizada"
+
+    assert client.get("/api/v1/oferentes/me/matriculas", headers=auth(token)).json() == antes
+    assert client.get(f"/api/v1/oferentes/{oferente_id}").json() == perfil_antes
+    assert _perfil(client, token)["fidelizado"] is True
+
+
+def test_el_estado_verificado_persiste_en_una_sesion_nueva(client, db_session):
+    crear_fila_padron(db_session)
+    token, oferente_id = crear_oferente(client, db_session, "bit4@test.com", "Maria Clara", "Alessi", "20-22222208-8")
+    client.post(
+        "/api/v1/oferentes/me/matriculas/validaciones",
+        json={"tipo_profesional": "Gasista", "numero_matricula": "1000008919"},
+        headers=auth(token),
+    )
+    client.post("/api/v1/auth/logout", headers=auth(token))
+
+    token_nuevo = client.post("/api/v1/auth/login", json={"email": "bit4@test.com", "password": PASSWORD}).json()["access_token"]
+    assert _perfil(client, token_nuevo)["fidelizado"] is True
+    assert client.get(f"/api/v1/oferentes/{oferente_id}").json()["tiene_matricula_validada"] is True
+
+
+# --- CA01/CA02: tipos, dígitos y Aire acondicionado ---------------------------
+
+
+def test_tipos_en_orden_alfabetico_con_sus_digitos(client, db_session):
+    token = registrar_y_loguear(client, "tipos@test.com")
+    respuesta = client.get("/api/v1/oferentes/me/matriculas/tipos", headers=auth(token))
+    assert respuesta.status_code == 200
+    assert respuesta.json() == [
+        {"tipo_profesional": "Aire acondicionado", "digitos": 8},
+        {"tipo_profesional": "Gasista", "digitos": 10},
+    ]
+
+
+def test_el_422_indica_cuantos_digitos_se_esperan(client, db_session):
+    token, _ = crear_oferente(client, db_session, "digitos@test.com", "Maria Clara", "Alessi", "20-22222209-6")
+    url = "/api/v1/oferentes/me/matriculas/validaciones"
+
+    aire = client.post(url, json={"tipo_profesional": "Aire acondicionado", "numero_matricula": "123456789"}, headers=auth(token))
+    gasista = client.post(url, json={"tipo_profesional": "Gasista", "numero_matricula": "123456789"}, headers=auth(token))
+
+    assert aire.status_code == 422 and "Debe ingresar 8 dígitos" in aire.text
+    assert gasista.status_code == 422 and "Debe ingresar 10 dígitos" in gasista.text
+
+
+def test_aire_acondicionado_valida_contra_su_propio_padron(client, db_session):
+    crear_fila_padron(db_session, tipo="Aire acondicionado", numero="28408435", nombre="ABATEDAGA MARTIN")
+    # Mismo número cargado como Gasista no tiene que servir para el otro oficio.
+    token, _ = crear_oferente(client, db_session, "aire@test.com", "Martin", "Abatedaga", "20-22222211-8")
+    url = "/api/v1/oferentes/me/matriculas/validaciones"
+
+    trampa = client.post(url, json={"tipo_profesional": "Aire acondicionado", "numero_matricula": "99999999"}, headers=auth(token))
+    valida = client.post(url, json={"tipo_profesional": "Aire acondicionado", "numero_matricula": "28408435"}, headers=auth(token))
+
+    assert trampa.json()["resultado"] == "Timeout"
+    assert valida.json()["resultado"] == "Validada"
+    assert valida.json()["matricula"]["tipo_profesional"] == "Aire acondicionado"
+>>>>>>> Stashed changes
