@@ -99,6 +99,7 @@ def perfil_actual(usuario: Usuario = Depends(get_current_user), db: Session = De
         nombre=usuario.nombre,
         rol=usuario.rol,
         requiere_registro=usuario.rol == RolUsuario.OFERENTE and db.get(Oferente, usuario.id_usuario) is None,
+        fidelizado=usuario.fidelizado,
     )
 
 

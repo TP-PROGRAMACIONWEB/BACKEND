@@ -28,6 +28,7 @@ class UsuarioOut(UsuarioBase):
     id_usuario: int
     rol: RolUsuario
     estado_cuenta: str
+    fidelizado: bool = Field(default=False, description="HU-02: true si fidelizó al menos una matrícula.")
     fecha_registro: datetime
 
 
@@ -45,6 +46,7 @@ class PerfilOut(BaseModel):
         default=False,
         description="true si es Oferente y todavía no completó el formulario de Profesional. El frontend lo manda a /registro.",
     )
+    fidelizado: bool = Field(default=False, description="HU-02: true si fidelizó al menos una matrícula.")
 
 
 class Token(BaseModel):
