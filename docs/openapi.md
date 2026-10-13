@@ -78,9 +78,12 @@ Endpoints nuevos o modificados de Sprint 2:
 | Método y ruta | Descripción |
 |---|---|
 | `POST /api/v1/oferentes/me/matriculas/validaciones` | El Oferente logueado valida `{tipo_profesional, numero_matricula}` contra el padrón cargado. Síncrono, devuelve un código de `resultado` (`Validada`, `No_Encontrada`, `Timeout`, `Ya_Fidelizada`, `Reemplazo_Solicitado`, `Vencida`, `Nombre_No_Coincide`) y su mensaje |
+| `GET /api/v1/oferentes/me/matriculas/tipos` | Tipos de profesional en orden alfabético con los dígitos de su matrícula (`Aire acondicionado` 8, `Gasista` 10) |
 | `GET /api/v1/oferentes/me/matriculas` | Matrículas fidelizadas por el Oferente autenticado |
 | `GET /api/v1/oferentes/me/matriculas/validaciones` | Historial de todos los intentos, incluidos los fallidos |
 | `PATCH /api/v1/admin/matriculas/reemplazos/{id_validacion}` | El Administrador autoriza o deniega un pedido de reemplazo de matrícula |
+
+`Timeout` sale cuando la consulta al padrón no responde en `MATRICULA_TIMEOUT_SEGUNDOS` (60 s); la matrícula trampa (`9999999999` Gasista, `99999999` Aire acondicionado) lo fuerza. `GET /api/v1/auth/me` devuelve además `fidelizado` (true con al menos una matrícula validada).
 
 **Alcance de esta fase:** solo está cargado el padrón de **Gasista** (`app/db/padrones/gasistas.md`, 68 matriculados). El tipo `Aire acondicionado` está soportado por el código (formato, matrícula trampa), pero como no hay padrón cargado, cualquier número de ese tipo devuelve `No_Encontrada` hasta que llegue el archivo real.
 

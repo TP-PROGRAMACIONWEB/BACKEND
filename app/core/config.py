@@ -27,10 +27,15 @@ class Settings(BaseSettings):
     # Vencimiento del enlace de reseña, en días desde la generación.
     solicitud_resena_dias_validez: int = 7
 
+    # CA03 de HU-02: si la consulta al padrón no responde en este tiempo, la
+    # validación devuelve Timeout. Tiene que quedar por debajo de la duración
+    # máxima de la función serverless, o el corte lo hace Vercel con un 504.
+    matricula_timeout_segundos: float = 60.0
+
     # Matrícula trampa del CA03 de HU-02: la validación consulta el padrón en la
-    # base local y nunca demora, así que el resultado Timeout solo se puede
-    # obtener con los números trampa, que responden al instante (decisión del
-    # equipo, para que QA no tenga que esperar). Desactivarla en producción.
+    # base local y nunca demora, así que QA no tiene cómo forzar la demora. Los
+    # números trampa simulan un padrón que no responde: la validación espera
+    # `matricula_timeout_segundos` y devuelve Timeout. Desactivarla en producción.
     matricula_trap_habilitada: bool = True
 
     # Schema de Postgres donde viven las tablas del backend. No aplica a SQLite.

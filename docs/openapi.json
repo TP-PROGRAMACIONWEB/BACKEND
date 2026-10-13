@@ -1571,7 +1571,7 @@
           "Matrículas"
         ],
         "summary": "Validar (fidelizar) una matrícula profesional contra el padrón",
-        "description": "HU-02 — El Profesional logueado carga tipo y número; la validación es\n**síncrona**, contra el padrón cargado en la base. Devuelve un código de\n`resultado` con su mensaje; el frontend lo renderiza.\n\n**Para QA (CA03):** el resultado `Timeout` se obtiene con la matrícula\ntrampa —`9999999999` para Gasista, `99999999` para Aire acondicionado—,\nque responde al instante, sin esperar ninguna demora real.",
+        "description": "HU-02 — El Profesional logueado carga tipo y número; la validación es\n**síncrona**, contra el padrón cargado en la base. Devuelve un código de\n`resultado` con su mensaje; el frontend lo renderiza.\n\n**CA03:** si la consulta al padrón no responde en\n`MATRICULA_TIMEOUT_SEGUNDOS` (60 por defecto), el resultado es `Timeout`.\n**Para QA:** la matrícula trampa —`9999999999` para Gasista, `99999999`\npara Aire acondicionado— simula un padrón que no responde, así que la\nrespuesta `Timeout` llega recién al cumplirse ese tiempo.",
         "operationId": "crear_validacion_api_v1_oferentes_me_matriculas_validaciones_post",
         "requestBody": {
           "content": {
@@ -1602,6 +1602,40 @@
           },
           "422": {
             "description": "Tipo inválido, o el número no tiene la cantidad de dígitos exigida"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/oferentes/me/matriculas/tipos": {
+      "get": {
+        "tags": [
+          "Matrículas"
+        ],
+        "summary": "Tipos de profesional que se pueden fidelizar y los dígitos de su matrícula",
+        "description": "HU-02 / CA01 — Alimenta el selector \"Tipo de profesional\", en orden\nalfabético (la primera opción es la que viene por defecto), y el label\n\"Debe ingresar X dígitos\" del número de matrícula.",
+        "operationId": "listar_tipos_api_v1_oferentes_me_matriculas_tipos_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TipoMatriculaOut"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Tipos Api V1 Oferentes Me Matriculas Tipos Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
           }
         },
         "security": [
@@ -3669,6 +3703,12 @@
             "title": "Requiere Registro",
             "description": "true si es Oferente y todavía no completó el formulario de Profesional. El frontend lo manda a /registro.",
             "default": false
+          },
+          "fidelizado": {
+            "type": "boolean",
+            "title": "Fidelizado",
+            "description": "HU-02: true si fidelizó al menos una matrícula.",
+            "default": false
           }
         },
         "type": "object",
@@ -4356,6 +4396,25 @@
         ],
         "title": "SubidaOut"
       },
+      "TipoMatriculaOut": {
+        "properties": {
+          "tipo_profesional": {
+            "type": "string",
+            "title": "Tipo Profesional"
+          },
+          "digitos": {
+            "type": "integer",
+            "title": "Digitos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo_profesional",
+          "digitos"
+        ],
+        "title": "TipoMatriculaOut",
+        "description": "Una opción del selector \"Tipo de profesional\", con la cantidad de\ndígitos que exige su número de matrícula."
+      },
       "Token": {
         "properties": {
           "access_token": {
@@ -4540,6 +4599,12 @@
           "estado_cuenta": {
             "type": "string",
             "title": "Estado Cuenta"
+          },
+          "fidelizado": {
+            "type": "boolean",
+            "title": "Fidelizado",
+            "description": "HU-02: true si fidelizó al menos una matrícula.",
+            "default": false
           },
           "fecha_registro": {
             "type": "string",
