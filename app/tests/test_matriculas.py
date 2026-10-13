@@ -563,3 +563,47 @@ def test_aire_acondicionado_valida_contra_su_propio_padron(client, db_session):
     assert trampa.json()["resultado"] == "Timeout"
     assert valida.json()["resultado"] == "Validada"
     assert valida.json()["matricula"]["tipo_profesional"] == "Aire acondicionado"
+
+
+def test_el_422_trae_el_campo_y_el_texto_sin_prefijo_de_pydantic(client, db_session):
+    token, _ = crear_oferente(client, db_session, "formato422@test.com", "Maria Clara", "Alessi", "30222227")
+    url = "/api/v1/oferentes/me/matriculas/validaciones"
+
+    corto = client.post(url, json={"tipo_profesional": "Gasista", "numero_matricula": "123"}, headers=auth(token))
+    vacio = client.post(url, json={"tipo_profesional": "Aire acondicionado", "numero_matricula": ""}, headers=auth(token))
+    letras = client.post(url, json={"tipo_profesional": "Gasista", "numero_matricula": "10000A8919"}, headers=auth(token))
+
+    assert corto.status_code == 422
+    assert corto.json()["detail"][0]["msg"] == "Debe ingresar 10 dígitos"
+    assert corto.json()["errores"] == [{"campo": "numero_matricula", "codigo": "digitos_invalidos"}]
+    assert vacio.json()["detail"][0]["msg"] == "Debe ingresar 8 dígitos"
+    assert letras.json()["errores"] == [{"campo": "numero_matricula", "codigo": "solo_digitos"}]
+
+
+def test_ya_fidelizada_tiene_prioridad_sobre_el_vencimiento(client, db_session):
+    crear_fila_padron(db_session)
+    token, _ = crear_oferente(client, db_session, "yafid@test.com", "Maria Clara", "Alessi", "30222228")
+    url = "/api/v1/oferentes/me/matriculas/validaciones"
+    cuerpo = {"tipo_profesional": "Gasista", "numero_matricula": "1000008919"}
+    assert client.post(url, json=cuerpo, headers=auth(token)).json()["resultado"] == "Validada"
+
+    fila = db_session.query(PadronMatricula).first()
+    fila.fecha_vencimiento = date(2020, 1, 1)
+    db_session.commit()
+
+    assert client.post(url, json=cuerpo, headers=auth(token)).json()["resultado"] == "Ya_Fidelizada"
+
+
+def test_las_esperas_de_la_trampa_estan_acotadas(client, db_session, monkeypatch):
+    import threading
+
+    monkeypatch.setattr(servicio_matriculas, "_ESPERAS_TRAMPA", threading.BoundedSemaphore(0))
+    token, _ = crear_oferente(client, db_session, "tope@test.com", "Maria Clara", "Alessi", "30222229")
+    inicio = time.monotonic()
+    respuesta = client.post(
+        "/api/v1/oferentes/me/matriculas/validaciones",
+        json={"tipo_profesional": "Gasista", "numero_matricula": "9999999999"},
+        headers=auth(token),
+    )
+    assert respuesta.json()["resultado"] == "No_Encontrada"
+    assert time.monotonic() - inicio < TIMEOUT_MATRICULA_TEST

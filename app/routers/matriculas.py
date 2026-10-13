@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
-from app.core.errores import error_negocio
+from app.core.errores import error_negocio, error_validacion
 from app.db.database import get_db
 from app.models.matricula import Matricula, ValidacionMatricula
 from app.models.oferente import Oferente
@@ -65,6 +65,13 @@ def crear_validacion(
     para Aire acondicionado— simula un padrón que no responde, así que la
     respuesta `Timeout` llega recién al cumplirse ese tiempo.
     """
+    esperados = DIGITOS_POR_TIPO[payload.tipo_profesional]
+    numero = payload.numero_matricula
+    if numero and not numero.isdigit():
+        raise error_validacion("numero_matricula", "solo_digitos", "El número de matrícula solo puede tener dígitos")
+    if len(numero) != esperados:
+        raise error_validacion("numero_matricula", "digitos_invalidos", f"Debe ingresar {esperados} dígitos")
+
     oferente = _oferente_actual(db, usuario)
     validacion = validar_matricula(db, oferente, payload.tipo_profesional, payload.numero_matricula)
     db.commit()

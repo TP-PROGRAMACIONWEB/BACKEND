@@ -85,6 +85,6 @@ Endpoints nuevos o modificados de Sprint 2:
 
 `Timeout` sale cuando la consulta al padrón no responde en `MATRICULA_TIMEOUT_SEGUNDOS` (60 s); la matrícula trampa (`9999999999` Gasista, `99999999` Aire acondicionado) lo fuerza. `GET /api/v1/auth/me` devuelve además `fidelizado` (true con al menos una matrícula validada).
 
-**Alcance de esta fase:** solo está cargado el padrón de **Gasista** (`app/db/padrones/gasistas.md`, 68 matriculados). El tipo `Aire acondicionado` está soportado por el código (formato, matrícula trampa), pero como no hay padrón cargado, cualquier número de ese tipo devuelve `No_Encontrada` hasta que llegue el archivo real.
+**Alcance:** el padrón de Gasista está completo (68 matriculados) y el de Aire acondicionado es parcial (49 de 77, falta la página 2 del export). Aire acondicionado exige 8 dígitos.
 
 Ver [`docs/plan-sprint-1.md`](plan-sprint-1.md) para el detalle completo de decisiones y alcance.
