@@ -1,0 +1,5 @@
+{
+  "functions": {
+    "api/index.py": { "maxDuration": 90 }
+  }
+}

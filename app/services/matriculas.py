@@ -154,6 +154,12 @@ def _supersedear_reemplazos_previos(db: Session, oferente_id: int, tipo_profesio
         notificacion.fecha_resolucion = ahora
 
 
+# Cada pedido con la matrícula trampa retiene dos hilos durante todo el límite de
+# tiempo. Se topan las esperas simultáneas para que no se pueda saturar la API
+# con la trampa habilitada; las que sobran responden como un número inexistente.
+_ESPERAS_TRAMPA = threading.BoundedSemaphore(3)
+
+
 class PadronSinRespuesta(Exception):
     """La consulta al padrón no respondió dentro de `matricula_timeout_segundos`."""
 
@@ -170,7 +176,12 @@ def _consultar_padron(bind, tipo_profesional: str, numero_matricula: str, cancel
     if settings.matricula_trap_habilitada and trampa is not None and numero_matricula == trampa:
         # Simula un padrón que no responde: queda esperando hasta que quien
         # consulta se cansa (el límite de tiempo) y la libera.
-        cancelar.wait()
+        if not _ESPERAS_TRAMPA.acquire(blocking=False):
+            return None
+        try:
+            cancelar.wait()
+        finally:
+            _ESPERAS_TRAMPA.release()
         return None
 
     with Session(bind=bind) as sesion:
@@ -215,6 +226,19 @@ def consultar_padron_con_limite(db: Session, tipo_profesional: str, numero_matri
     return salida["fila"]
 
 
+def _ya_fidelizada(db: Session, oferente: Oferente, tipo_profesional: str, numero_matricula: str) -> bool:
+    return (
+        db.query(Matricula)
+        .filter(
+            Matricula.oferente_id == oferente.id_oferente,
+            Matricula.tipo_profesional == tipo_profesional,
+            Matricula.numero_matricula == numero_matricula,
+        )
+        .first()
+        is not None
+    )
+
+
 def validar_matricula(db: Session, oferente: Oferente, tipo_profesional: str, numero_matricula: str) -> ValidacionMatricula:
     categoria_padron: str | None = None
     fecha_vencimiento_padron: date | None = None
@@ -228,6 +252,11 @@ def validar_matricula(db: Session, oferente: Oferente, tipo_profesional: str, nu
             resultado = ResultadoValidacion.NO_ENCONTRADA
         elif not comparar_nombres(oferente.nombre, padron.nombre_matriculado):
             resultado = ResultadoValidacion.NOMBRE_NO_COINCIDE
+        elif _ya_fidelizada(db, oferente, tipo_profesional, numero_matricula):
+            # CA06: tiene prioridad sobre el vencimiento; no modifica nada.
+            resultado = ResultadoValidacion.YA_FIDELIZADA
+            categoria_padron = padron.categoria
+            fecha_vencimiento_padron = padron.fecha_vencimiento
         elif padron.fecha_vencimiento < date.today():
             resultado = ResultadoValidacion.VENCIDA
         else:
@@ -240,8 +269,6 @@ def validar_matricula(db: Session, oferente: Oferente, tipo_profesional: str, nu
             )
             if not existente:
                 resultado = ResultadoValidacion.VALIDADA
-            elif existente.numero_matricula == numero_matricula:
-                resultado = ResultadoValidacion.YA_FIDELIZADA
             else:
                 resultado = ResultadoValidacion.REEMPLAZO_SOLICITADO
 

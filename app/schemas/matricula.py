@@ -3,8 +3,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.services.matriculas import DIGITOS_POR_TIPO
-
 TipoProfesionalLiteral = Literal["Gasista", "Aire acondicionado"]
 
 
@@ -19,14 +17,11 @@ class ValidacionMatriculaIn(BaseModel):
     numero_matricula: str = Field(description="Solo dígitos. 10 para Gasista, 8 para Aire acondicionado.")
 
     @model_validator(mode="after")
-    def validar_numero(self):
-        numero = self.numero_matricula.strip()
-        if not numero.isdigit():
-            raise ValueError("El número de matrícula solo puede tener dígitos")
-        esperados = DIGITOS_POR_TIPO[self.tipo_profesional]
-        if len(numero) != esperados:
-            raise ValueError(f"Debe ingresar {esperados} dígitos")
-        self.numero_matricula = numero
+    def normalizar_numero(self):
+        # El formato (solo dígitos y cantidad por tipo) lo valida el router con
+        # `error_validacion`, para que el 422 traiga el campo y el texto del CA01
+        # sin el prefijo "Value error," de Pydantic.
+        self.numero_matricula = self.numero_matricula.strip()
         return self
 
 
