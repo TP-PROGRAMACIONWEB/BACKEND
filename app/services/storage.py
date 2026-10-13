@@ -83,11 +83,14 @@ class SupabaseStorageService(StorageService):
         if respuesta.status_code >= 400:
             raise StorageError(f"Supabase no pudo leer el objeto (HTTP {respuesta.status_code})")
         datos = respuesta.json()
+        # `object/info` devuelve `size` y `content_type` en el nivel superior y
+        # deja `metadata` vacío; `metadata.size`/`metadata.mimetype` es la forma
+        # que usan otras rutas de Storage. Se aceptan las dos.
         metadatos = datos.get("metadata") or {}
         return ObjetoStorage(
             path=path,
-            tamano_bytes=int(metadatos.get("size", datos.get("size", 0))),
-            content_type=metadatos.get("mimetype", datos.get("mimetype", "")),
+            tamano_bytes=int(metadatos.get("size") or datos.get("size") or 0),
+            content_type=metadatos.get("mimetype") or datos.get("content_type") or datos.get("mimetype") or "",
         )
 
     def eliminar(self, paths: list[str]) -> None:

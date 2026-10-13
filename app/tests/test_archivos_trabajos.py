@@ -352,3 +352,45 @@ def test_storage_caido_responde_502_y_no_guarda_nada(client, db_session, oferent
 def test_catalogo_expone_los_limites_de_trabajos(client):
     limites = client.get("/api/v1/catalogos/registro-oferente").json()["limites"]
     assert limites == {"trabajos": 5, "fotos_por_trabajo": 5, "tamano_maximo_mb": 5}
+
+
+# --- Cliente real de Storage: forma de la respuesta de object/info ------------
+
+
+def _servicio_con_respuesta(monkeypatch, status_code, cuerpo):
+    """SupabaseStorageService con httpx simulado: devuelve `cuerpo` tal como lo
+    manda Storage, para probar el parseo sin tocar la red."""
+    import httpx
+
+    from app.services.storage import SupabaseStorageService
+
+    respuesta = httpx.Response(status_code, json=cuerpo)
+    monkeypatch.setattr(httpx, "request", lambda *args, **kwargs: respuesta)
+    return SupabaseStorageService(url="https://proyecto.supabase.co", service_role_key="clave", bucket="offix-media")
+
+
+def test_obtener_objeto_lee_content_type_y_size_de_la_respuesta_real(monkeypatch):
+    """Caso real de producción: `object/info` trae `size` y `content_type` arriba
+    y `metadata` vacío. Antes el MIME quedaba en "" y la foto se rechazaba."""
+    servicio = _servicio_con_respuesta(
+        monkeypatch, 200, {"name": "oferentes/9/perfil/a.jpg", "size": 25382, "content_type": "image/jpeg", "metadata": {}}
+    )
+
+    objeto = servicio.obtener_objeto("oferentes/9/perfil/a.jpg")
+
+    assert objeto.content_type == "image/jpeg"
+    assert objeto.tamano_bytes == 25382
+
+
+def test_obtener_objeto_sigue_leyendo_metadata_si_viene_poblada(monkeypatch):
+    servicio = _servicio_con_respuesta(monkeypatch, 200, {"metadata": {"size": 1000, "mimetype": "image/png"}})
+
+    objeto = servicio.obtener_objeto("oferentes/9/perfil/a.png")
+
+    assert (objeto.content_type, objeto.tamano_bytes) == ("image/png", 1000)
+
+
+def test_obtener_objeto_inexistente_devuelve_none(monkeypatch):
+    servicio = _servicio_con_respuesta(monkeypatch, 404, {"error": "not_found"})
+
+    assert servicio.obtener_objeto("oferentes/9/perfil/nada.jpg") is None
