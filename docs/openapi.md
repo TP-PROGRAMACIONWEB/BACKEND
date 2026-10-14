@@ -61,8 +61,8 @@ Endpoints nuevos o modificados de Sprint 2:
 | `POST /api/v1/oferentes/me/archivos/subidas` | Paso 1 de la subida: valida y devuelve `path` y `upload_url` firmada de Supabase |
 | `PUT /api/v1/oferentes/me/foto-perfil` · `DELETE …/foto-perfil` · `PUT …/portada` | Confirmación (paso 3) y borrado de imágenes únicas |
 | `GET /api/v1/oferentes/{id}/trabajos` · `POST /api/v1/oferentes/me/trabajos` · `DELETE …/trabajos/{id}` | Trabajos realizados con fotos ordenadas; el alta devuelve 409 `limite_trabajos` a partir del quinto |
-| `POST /api/v1/oferentes/{id}/solicitudes-resena` | Auth opcional: anónimo solo correo; el Profesional dueño, teléfono o correo. Límites anti-spam: 429 `limite_solicitudes` |
-| `GET /api/v1/oferentes/{id}/resenas` | Opiniones públicas: `cliente` = "Juan C.", sin contacto |
+| `POST /api/v1/oferentes/{id}/solicitudes-resena` | Auth opcional: anónimo solo correo; el Profesional dueño, teléfono o correo. Límites anti-spam (el reenvío del mismo enlace también cuenta): 429 `limite_solicitudes` |
+| `GET /api/v1/oferentes/{id}/resenas` | Opiniones públicas paginadas (`pagina`, `por_pagina` de 1 a 10, por defecto 5; respuesta con `items`, `total`, `paginas`): `cliente` = "Juan C.", sin contacto |
 
 ## Notas de alcance (Sprint 1, revisión 4)
 
@@ -78,10 +78,13 @@ Endpoints nuevos o modificados de Sprint 2:
 | Método y ruta | Descripción |
 |---|---|
 | `POST /api/v1/oferentes/me/matriculas/validaciones` | El Oferente logueado valida `{tipo_profesional, numero_matricula}` contra el padrón cargado. Síncrono, devuelve un código de `resultado` (`Validada`, `No_Encontrada`, `Timeout`, `Ya_Fidelizada`, `Reemplazo_Solicitado`, `Vencida`, `Nombre_No_Coincide`) y su mensaje |
+| `GET /api/v1/oferentes/me/matriculas/tipos` | Tipos de profesional en orden alfabético con los dígitos de su matrícula (`Aire acondicionado` 8, `Gasista` 10) |
 | `GET /api/v1/oferentes/me/matriculas` | Matrículas fidelizadas por el Oferente autenticado |
 | `GET /api/v1/oferentes/me/matriculas/validaciones` | Historial de todos los intentos, incluidos los fallidos |
 | `PATCH /api/v1/admin/matriculas/reemplazos/{id_validacion}` | El Administrador autoriza o deniega un pedido de reemplazo de matrícula |
 
-**Alcance de esta fase:** solo está cargado el padrón de **Gasista** (`app/db/padrones/gasistas.md`, 68 matriculados). El tipo `Aire acondicionado` está soportado por el código (formato, matrícula trampa), pero como no hay padrón cargado, cualquier número de ese tipo devuelve `No_Encontrada` hasta que llegue el archivo real.
+`Timeout` sale cuando la consulta al padrón no responde en `MATRICULA_TIMEOUT_SEGUNDOS` (60 s); la matrícula trampa (`9999999999` Gasista, `99999999` Aire acondicionado) lo fuerza. `GET /api/v1/auth/me` devuelve además `fidelizado` (true con al menos una matrícula validada).
+
+**Alcance:** el padrón de Gasista está completo (68 matriculados) y el de Aire acondicionado es parcial (49 de 77, falta la página 2 del export). Aire acondicionado exige 8 dígitos.
 
 Ver [`docs/plan-sprint-1.md`](plan-sprint-1.md) para el detalle completo de decisiones y alcance.

@@ -2,13 +2,19 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
-from app.core.errores import error_negocio
+from app.core.errores import error_negocio, error_validacion
 from app.db.database import get_db
 from app.models.matricula import Matricula, ValidacionMatricula
 from app.models.oferente import Oferente
 from app.models.usuario import Usuario
-from app.schemas.matricula import MatriculaOut, ValidacionHistorialOut, ValidacionMatriculaIn, ValidacionMatriculaOut
-from app.services.matriculas import MENSAJES_RESULTADO, validar_matricula
+from app.schemas.matricula import (
+    MatriculaOut,
+    TipoMatriculaOut,
+    ValidacionHistorialOut,
+    ValidacionMatriculaIn,
+    ValidacionMatriculaOut,
+)
+from app.services.matriculas import MENSAJES_RESULTADO, RANGO_DIGITOS_POR_TIPO, validar_matricula
 
 router = APIRouter(prefix="/api/v1/oferentes/me/matriculas", tags=["Matrículas"])
 
@@ -53,16 +59,45 @@ def crear_validacion(
     **síncrona**, contra el padrón cargado en la base. Devuelve un código de
     `resultado` con su mensaje; el frontend lo renderiza.
 
-    **Para QA (CA03):** el resultado `Timeout` se obtiene con la matrícula
-    trampa —`9999999999` para Gasista, `99999999` para Aire acondicionado—,
-    que responde al instante, sin esperar ninguna demora real.
+    **CA03:** si la consulta al padrón no responde en
+    `MATRICULA_TIMEOUT_SEGUNDOS` (60 por defecto), el resultado es `Timeout`.
+    **Para QA:** la matrícula trampa —`9999999999` para Gasista, `99999999`
+    para Aire acondicionado— simula un padrón que no responde, así que la
+    respuesta `Timeout` llega recién al cumplirse ese tiempo.
     """
+    minimo, maximo = RANGO_DIGITOS_POR_TIPO[payload.tipo_profesional]
+    numero = payload.numero_matricula
+    if numero and not numero.isdigit():
+        raise error_validacion("numero_matricula", "solo_digitos", "El número de matrícula solo puede tener dígitos")
+    if not (minimo <= len(numero) <= maximo):
+        if minimo == maximo:
+            raise error_validacion("numero_matricula", "digitos_invalidos", f"Debe ingresar {maximo} dígitos")
+        raise error_validacion(
+            "numero_matricula", "digitos_invalidos", f"Debe ingresar entre {minimo} y {maximo} dígitos"
+        )
+
     oferente = _oferente_actual(db, usuario)
     validacion = validar_matricula(db, oferente, payload.tipo_profesional, payload.numero_matricula)
     db.commit()
 
     matricula = _matricula_vigente(db, oferente.id_oferente, payload.tipo_profesional)
     return ValidacionMatriculaOut(resultado=validacion.resultado, mensaje=MENSAJES_RESULTADO[validacion.resultado], matricula=matricula)
+
+
+@router.get(
+    "/tipos",
+    response_model=list[TipoMatriculaOut],
+    summary="Tipos de profesional que se pueden fidelizar y los dígitos de su matrícula",
+    responses={401: {"description": "Falta token o es inválido"}},
+)
+def listar_tipos(usuario: Usuario = Depends(get_current_user)):
+    """HU-02 / CA01 — Alimenta el selector "Tipo de profesional", en orden
+    alfabético (la primera opción es la que viene por defecto), y el label
+    de dígitos del número de matrícula (`digitos_min`-`digitos`)."""
+    return [
+        TipoMatriculaOut(tipo_profesional=tipo, digitos=maximo, digitos_min=minimo)
+        for tipo, (minimo, maximo) in sorted(RANGO_DIGITOS_POR_TIPO.items())
+    ]
 
 
 @router.get(

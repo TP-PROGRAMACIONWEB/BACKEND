@@ -189,10 +189,10 @@ def _subir_fotos_trabajo(client, storage, token, cantidad):
     return paths
 
 
-def _cargar_trabajo(client, token, fotos, descripcion="Reemplazo del disyuntor diferencial del tablero."):
+def _cargar_trabajo(client, token, fotos, titulo="Cambio de disyuntor", descripcion="Reemplazo del disyuntor diferencial del tablero."):
     return client.post(
         "/api/v1/oferentes/me/trabajos",
-        json={"titulo": "Cambio de disyuntor", "descripcion": descripcion, "fotos": fotos},
+        json={"titulo": titulo, "descripcion": descripcion, "fotos": fotos},
         headers=_auth(token),
     )
 
@@ -249,29 +249,42 @@ def test_la_misma_foto_dos_veces_da_422(client, storage, oferente):
     assert respuesta.json()["errores"] == [{"campo": "fotos", "codigo": "fotos_duplicadas"}]
 
 
-def test_descripcion_obligatoria_y_con_minimo(client, storage, oferente):
+def test_descripcion_opcional_pero_con_minimo_si_se_carga(client, storage, oferente):
     token, _ = oferente
     fotos = _subir_fotos_trabajo(client, storage, token, 1)
 
-    vacia = _cargar_trabajo(client, token, fotos, descripcion="")
+    sin_descripcion = _cargar_trabajo(client, token, fotos, titulo="Sin detalle", descripcion="")
     corta = _cargar_trabajo(client, token, fotos, descripcion="corto")
 
-    assert vacia.json()["errores"] == [{"campo": "descripcion", "codigo": "requerido"}]
+    assert sin_descripcion.status_code == 201, sin_descripcion.text
+    assert sin_descripcion.json()["descripcion"] is None
+    assert corta.status_code == 422
     assert corta.json()["errores"] == [{"campo": "descripcion", "codigo": "longitud_minima"}]
 
 
-def test_titulo_es_opcional(client, storage, oferente):
+def test_titulo_obligatorio_y_no_vacio(client, storage, oferente):
     token, _ = oferente
     fotos = _subir_fotos_trabajo(client, storage, token, 1)
 
-    respuesta = client.post(
+    sin_titulo = client.post(
         "/api/v1/oferentes/me/trabajos",
-        json={"titulo": "  ", "descripcion": "Instalación completa de tablero.", "fotos": fotos},
+        json={"descripcion": "Instalación completa de tablero.", "fotos": fotos},
         headers=_auth(token),
     )
+    solo_espacios = _cargar_trabajo(client, token, fotos, titulo="   ")
 
-    assert respuesta.status_code == 201, respuesta.text
-    assert respuesta.json()["titulo"] is None
+    assert sin_titulo.json()["errores"] == [{"campo": "titulo", "codigo": "requerido"}]
+    assert solo_espacios.json()["errores"] == [{"campo": "titulo", "codigo": "longitud_minima"}]
+
+
+def test_titulo_demasiado_largo_da_422(client, storage, oferente):
+    token, _ = oferente
+    fotos = _subir_fotos_trabajo(client, storage, token, 1)
+
+    respuesta = _cargar_trabajo(client, token, fotos, titulo="x" * 101)
+
+    assert respuesta.status_code == 422
+    assert respuesta.json()["errores"] == [{"campo": "titulo", "codigo": "longitud_maxima"}]
 
 
 def test_sexto_trabajo_da_409_limite_trabajos(client, storage, oferente):
@@ -339,3 +352,45 @@ def test_storage_caido_responde_502_y_no_guarda_nada(client, db_session, oferent
 def test_catalogo_expone_los_limites_de_trabajos(client):
     limites = client.get("/api/v1/catalogos/registro-oferente").json()["limites"]
     assert limites == {"trabajos": 5, "fotos_por_trabajo": 5, "tamano_maximo_mb": 5}
+
+
+# --- Cliente real de Storage: forma de la respuesta de object/info ------------
+
+
+def _servicio_con_respuesta(monkeypatch, status_code, cuerpo):
+    """SupabaseStorageService con httpx simulado: devuelve `cuerpo` tal como lo
+    manda Storage, para probar el parseo sin tocar la red."""
+    import httpx
+
+    from app.services.storage import SupabaseStorageService
+
+    respuesta = httpx.Response(status_code, json=cuerpo)
+    monkeypatch.setattr(httpx, "request", lambda *args, **kwargs: respuesta)
+    return SupabaseStorageService(url="https://proyecto.supabase.co", service_role_key="clave", bucket="offix-media")
+
+
+def test_obtener_objeto_lee_content_type_y_size_de_la_respuesta_real(monkeypatch):
+    """Caso real de producción: `object/info` trae `size` y `content_type` arriba
+    y `metadata` vacío. Antes el MIME quedaba en "" y la foto se rechazaba."""
+    servicio = _servicio_con_respuesta(
+        monkeypatch, 200, {"name": "oferentes/9/perfil/a.jpg", "size": 25382, "content_type": "image/jpeg", "metadata": {}}
+    )
+
+    objeto = servicio.obtener_objeto("oferentes/9/perfil/a.jpg")
+
+    assert objeto.content_type == "image/jpeg"
+    assert objeto.tamano_bytes == 25382
+
+
+def test_obtener_objeto_sigue_leyendo_metadata_si_viene_poblada(monkeypatch):
+    servicio = _servicio_con_respuesta(monkeypatch, 200, {"metadata": {"size": 1000, "mimetype": "image/png"}})
+
+    objeto = servicio.obtener_objeto("oferentes/9/perfil/a.png")
+
+    assert (objeto.content_type, objeto.tamano_bytes) == ("image/png", 1000)
+
+
+def test_obtener_objeto_inexistente_devuelve_none(monkeypatch):
+    servicio = _servicio_con_respuesta(monkeypatch, 404, {"error": "not_found"})
+
+    assert servicio.obtener_objeto("oferentes/9/perfil/nada.jpg") is None

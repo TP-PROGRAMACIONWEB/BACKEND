@@ -3,8 +3,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.services.matriculas import RANGO_DIGITOS_POR_TIPO
-
 TipoProfesionalLiteral = Literal["Gasista", "Aire acondicionado"]
 
 
@@ -19,17 +17,22 @@ class ValidacionMatriculaIn(BaseModel):
     numero_matricula: str = Field(description="Solo dígitos. Gasista 2-10 (10 local, cortas Ecogas/GasNea), Aire 8 exactos.")
 
     @model_validator(mode="after")
-    def validar_numero(self):
-        numero = self.numero_matricula.strip()
-        if not numero.isdigit():
-            raise ValueError("El número de matrícula solo puede tener dígitos")
-        minimo, maximo = RANGO_DIGITOS_POR_TIPO[self.tipo_profesional]
-        if not (minimo <= len(numero) <= maximo):
-            if minimo == maximo:
-                raise ValueError(f"El número de matrícula de {self.tipo_profesional} debe tener {maximo} dígitos")
-            raise ValueError(f"El número de matrícula de {self.tipo_profesional} debe tener entre {minimo} y {maximo} dígitos")
-        self.numero_matricula = numero
+    def normalizar_numero(self):
+        # El formato (solo dígitos y rango por tipo) lo valida el router con
+        # `error_validacion`, para que el 422 traiga el campo y el texto del CA01
+        # sin el prefijo "Value error," de Pydantic.
+        self.numero_matricula = self.numero_matricula.strip()
         return self
+
+
+class TipoMatriculaOut(BaseModel):
+    """Una opción del selector "Tipo de profesional", con el rango de
+    dígitos que acepta su número de matrícula (multifuente). `digitos` se
+    mantiene como máximo por compatibilidad."""
+
+    tipo_profesional: str
+    digitos: int
+    digitos_min: int = 2
 
 
 class MatriculaOut(BaseModel):

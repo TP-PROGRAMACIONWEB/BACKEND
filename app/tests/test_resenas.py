@@ -425,7 +425,7 @@ def test_listar_resenas_publicas_solo_muestra_aceptadas(client, db_session):
 
     response = client.get(f"/api/v1/oferentes/{oferente_id}/resenas")
     assert response.status_code == 200
-    resultados = response.json()
+    resultados = response.json()["items"]
     assert len(resultados) == 1
     assert resultados[0]["cliente"] == "Juan C."
     assert "estado" not in resultados[0]

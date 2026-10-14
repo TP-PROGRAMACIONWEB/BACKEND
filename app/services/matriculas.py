@@ -1,7 +1,7 @@
 """Validación de matrícula profesional (HU-02, Fase 4).
 
-Orquesta el flujo completo descrito en `docs/plan-sprint-1.md`: matrícula
-trampa → padrón → coincidencia de nombre → vencimiento → alta / reemplazo /
+Orquesta el flujo completo descrito en `docs/plan-sprint-1.md`: consulta al
+padrón con límite de tiempo → coincidencia de nombre → vencimiento → alta / reemplazo /
 ya-fidelizada, dejando el historial completo en `ValidacionMatricula` y
 disparando las notificaciones de la bandeja que correspondan. Igual que
 `services/resenas.py` y `services/notificaciones.py`, solo hace `flush`: el
@@ -9,7 +9,9 @@ disparando las notificaciones de la bandeja que correspondan. Igual que
 """
 
 import re
+import threading
 import unicodedata
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from difflib import SequenceMatcher
 
@@ -162,16 +164,39 @@ def _supersedear_reemplazos_previos(db: Session, oferente_id: int, tipo_profesio
         notificacion.fecha_resolucion = ahora
 
 
-def validar_matricula(db: Session, oferente: Oferente, tipo_profesional: str, numero_matricula: str) -> ValidacionMatricula:
-    categoria_padron: str | None = None
-    fecha_vencimiento_padron: date | None = None
+# Cada pedido con la matrícula trampa retiene dos hilos durante todo el límite de
+# tiempo. Se topan las esperas simultáneas para que no se pueda saturar la API
+# con la trampa habilitada; las que sobran responden como un número inexistente.
+_ESPERAS_TRAMPA = threading.BoundedSemaphore(3)
 
+
+class PadronSinRespuesta(Exception):
+    """La consulta al padrón no respondió dentro de `matricula_timeout_segundos`."""
+
+
+@dataclass(frozen=True)
+class FilaPadronConsultada:
+    nombre_matriculado: str
+    categoria: str
+    fecha_vencimiento: date
+
+
+def _consultar_padron(bind, tipo_profesional: str, numero_matricula: str, cancelar: threading.Event) -> FilaPadronConsultada | None:
     trampa = MATRICULAS_TRAMPA.get(tipo_profesional)
     if settings.matricula_trap_habilitada and trampa is not None and numero_matricula == trampa:
-        resultado = ResultadoValidacion.TIMEOUT
-    else:
+        # Simula un padrón que no responde: queda esperando hasta que quien
+        # consulta se cansa (el límite de tiempo) y la libera.
+        if not _ESPERAS_TRAMPA.acquire(blocking=False):
+            return None
+        try:
+            cancelar.wait()
+        finally:
+            _ESPERAS_TRAMPA.release()
+        return None
+
+    with Session(bind=bind) as sesion:
         padron = (
-            db.query(PadronMatricula)
+            sesion.query(PadronMatricula)
             .filter(
                 PadronMatricula.tipo_profesional == tipo_profesional,
                 PadronMatricula.numero_matricula == numero_matricula,
@@ -179,9 +204,69 @@ def validar_matricula(db: Session, oferente: Oferente, tipo_profesional: str, nu
             .first()
         )
         if not padron:
+            return None
+        return FilaPadronConsultada(
+            nombre_matriculado=padron.nombre_matriculado,
+            categoria=padron.categoria,
+            fecha_vencimiento=padron.fecha_vencimiento,
+        )
+
+
+def consultar_padron_con_limite(db: Session, tipo_profesional: str, numero_matricula: str) -> FilaPadronConsultada | None:
+    """Busca la matrícula en el padrón con un límite de tiempo (CA03). La
+    consulta corre en un hilo aparte y con su propia sesión: si vence el
+    límite, la sesión del request no queda en uso y puede guardar el intento."""
+    cancelar = threading.Event()
+    salida: dict = {}
+
+    def tarea() -> None:
+        try:
+            salida["fila"] = _consultar_padron(db.get_bind(), tipo_profesional, numero_matricula, cancelar)
+        except Exception as exc:  # se relanza en el hilo del request
+            salida["error"] = exc
+
+    hilo = threading.Thread(target=tarea, daemon=True)
+    hilo.start()
+    hilo.join(settings.matricula_timeout_segundos)
+    if hilo.is_alive():
+        cancelar.set()
+        raise PadronSinRespuesta()
+    if "error" in salida:
+        raise salida["error"]
+    return salida["fila"]
+
+
+def _ya_fidelizada(db: Session, oferente: Oferente, tipo_profesional: str, numero_matricula: str) -> bool:
+    return (
+        db.query(Matricula)
+        .filter(
+            Matricula.oferente_id == oferente.id_oferente,
+            Matricula.tipo_profesional == tipo_profesional,
+            Matricula.numero_matricula == numero_matricula,
+        )
+        .first()
+        is not None
+    )
+
+
+def validar_matricula(db: Session, oferente: Oferente, tipo_profesional: str, numero_matricula: str) -> ValidacionMatricula:
+    categoria_padron: str | None = None
+    fecha_vencimiento_padron: date | None = None
+
+    try:
+        padron = consultar_padron_con_limite(db, tipo_profesional, numero_matricula)
+    except PadronSinRespuesta:
+        resultado = ResultadoValidacion.TIMEOUT
+    else:
+        if not padron:
             resultado = ResultadoValidacion.NO_ENCONTRADA
         elif not comparar_nombres(oferente.nombre, padron.nombre_matriculado):
             resultado = ResultadoValidacion.NOMBRE_NO_COINCIDE
+        elif _ya_fidelizada(db, oferente, tipo_profesional, numero_matricula):
+            # CA06: tiene prioridad sobre el vencimiento; no modifica nada.
+            resultado = ResultadoValidacion.YA_FIDELIZADA
+            categoria_padron = padron.categoria
+            fecha_vencimiento_padron = padron.fecha_vencimiento
         elif padron.fecha_vencimiento < date.today():
             resultado = ResultadoValidacion.VENCIDA
         else:
@@ -194,8 +279,6 @@ def validar_matricula(db: Session, oferente: Oferente, tipo_profesional: str, nu
             )
             if not existente:
                 resultado = ResultadoValidacion.VALIDADA
-            elif existente.numero_matricula == numero_matricula:
-                resultado = ResultadoValidacion.YA_FIDELIZADA
             else:
                 resultado = ResultadoValidacion.REEMPLAZO_SOLICITADO
 
@@ -221,6 +304,7 @@ def validar_matricula(db: Session, oferente: Oferente, tipo_profesional: str, nu
                 fecha_vencimiento=fecha_vencimiento_padron,
             )
         )
+        oferente.usuario.fidelizado = True
         _crear_notificacion(
             db,
             usuario_id=oferente.id_oferente,

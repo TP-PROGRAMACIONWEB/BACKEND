@@ -192,6 +192,16 @@ class ResenaPublicaOut(BaseModel):
     fecha_creacion: datetime = Field(description="Cuándo la cargó el cliente, no cuándo la aceptó el Profesional.")
 
 
+class ResenasPaginadasOut(BaseModel):
+    """Una página de la pestaña "Opiniones" del perfil público."""
+
+    items: list[ResenaPublicaOut]
+    total: int = Field(description="Cantidad de opiniones aceptadas, sin paginar.")
+    pagina: int = Field(description="Página devuelta, desde 1.")
+    por_pagina: int = Field(description="Tamaño de página pedido.")
+    paginas: int = Field(description="Cantidad de páginas con ese tamaño. 0 si el Profesional no tiene opiniones.")
+
+
 class ResenaOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

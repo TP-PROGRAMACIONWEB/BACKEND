@@ -318,10 +318,10 @@
                   "type": "null"
                 }
               ],
-              "description": "Palabra clave: nombre o apellido",
+              "description": "Palabra clave: parte del nombre",
               "title": "Q"
             },
-            "description": "Palabra clave: nombre o apellido"
+            "description": "Palabra clave: parte del nombre"
           },
           {
             "name": "categoria_id",
@@ -1279,7 +1279,7 @@
         "tags": [
           "Reseñas"
         ],
-        "summary": "Opiniones aceptadas de un Profesional (público)",
+        "summary": "Opiniones aceptadas de un Profesional, paginadas (público)",
         "description": "RF7 / HU-01 T07 — Solo reseñas `Aceptada`, más nuevas primero. Sin datos\nde contacto del cliente y con el nombre reducido a \"Juan C.\".",
         "operationId": "listar_resenas_publicas_api_v1_oferentes__oferente_id__resenas_get",
         "parameters": [
@@ -1291,6 +1291,33 @@
               "type": "integer",
               "title": "Oferente Id"
             }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Número de página, desde 1.",
+              "default": 1,
+              "title": "Pagina"
+            },
+            "description": "Número de página, desde 1."
+          },
+          {
+            "name": "por_pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 10,
+              "minimum": 1,
+              "description": "Opiniones por página: 5 o 10 según lo que elija el frontend.",
+              "default": 5,
+              "title": "Por Pagina"
+            },
+            "description": "Opiniones por página: 5 o 10 según lo que elija el frontend."
           }
         ],
         "responses": {
@@ -1299,24 +1326,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ResenaPublicaOut"
-                  },
-                  "title": "Response Listar Resenas Publicas Api V1 Oferentes  Oferente Id  Resenas Get"
+                  "$ref": "#/components/schemas/ResenasPaginadasOut"
                 }
               }
             }
           },
           "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
+            "description": "`pagina` menor a 1, o `por_pagina` fuera de 1 a 10"
           }
         }
       }
@@ -1555,7 +1571,7 @@
           "Matrículas"
         ],
         "summary": "Validar (fidelizar) una matrícula profesional contra el padrón",
-        "description": "HU-02 — El Profesional logueado carga tipo y número; la validación es\n**síncrona**, contra el padrón cargado en la base. Devuelve un código de\n`resultado` con su mensaje; el frontend lo renderiza.\n\n**Para QA (CA03):** el resultado `Timeout` se obtiene con la matrícula\ntrampa —`9999999999` para Gasista, `99999999` para Aire acondicionado—,\nque responde al instante, sin esperar ninguna demora real.",
+        "description": "HU-02 — El Profesional logueado carga tipo y número; la validación es\n**síncrona**, contra el padrón cargado en la base. Devuelve un código de\n`resultado` con su mensaje; el frontend lo renderiza.\n\n**CA03:** si la consulta al padrón no responde en\n`MATRICULA_TIMEOUT_SEGUNDOS` (60 por defecto), el resultado es `Timeout`.\n**Para QA:** la matrícula trampa —`9999999999` para Gasista, `99999999`\npara Aire acondicionado— simula un padrón que no responde, así que la\nrespuesta `Timeout` llega recién al cumplirse ese tiempo.",
         "operationId": "crear_validacion_api_v1_oferentes_me_matriculas_validaciones_post",
         "requestBody": {
           "content": {
@@ -1586,6 +1602,40 @@
           },
           "422": {
             "description": "Tipo inválido, o el número no tiene la cantidad de dígitos exigida"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/oferentes/me/matriculas/tipos": {
+      "get": {
+        "tags": [
+          "Matrículas"
+        ],
+        "summary": "Tipos de profesional que se pueden fidelizar y los dígitos de su matrícula",
+        "description": "HU-02 / CA01 — Alimenta el selector \"Tipo de profesional\", en orden\nalfabético (la primera opción es la que viene por defecto), y el label\nde dígitos del número de matrícula (`digitos_min`-`digitos`).",
+        "operationId": "listar_tipos_api_v1_oferentes_me_matriculas_tipos_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TipoMatriculaOut"
+                  },
+                  "type": "array",
+                  "title": "Response Listar Tipos Api V1 Oferentes Me Matriculas Tipos Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
           }
         },
         "security": [
@@ -2888,7 +2938,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 100,
+                "maxLength": 150,
                 "minLength": 2
               },
               {
@@ -2896,19 +2946,6 @@
               }
             ],
             "title": "Nombre"
-          },
-          "apellido": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 100,
-                "minLength": 2
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Apellido"
           },
           "telefono": {
             "anyOf": [
@@ -3084,10 +3121,6 @@
           "nombre": {
             "type": "string",
             "title": "Nombre"
-          },
-          "apellido": {
-            "type": "string",
-            "title": "Apellido"
           },
           "categoria_id": {
             "anyOf": [
@@ -3295,7 +3328,6 @@
         "required": [
           "id_oferente",
           "nombre",
-          "apellido",
           "telefono",
           "email",
           "disponible_emergencia",
@@ -3318,10 +3350,6 @@
           "nombre": {
             "type": "string",
             "title": "Nombre"
-          },
-          "apellido": {
-            "type": "string",
-            "title": "Apellido"
           },
           "categoria_id": {
             "anyOf": [
@@ -3516,7 +3544,6 @@
         "required": [
           "id_oferente",
           "nombre",
-          "apellido",
           "telefono",
           "email",
           "disponible_emergencia",
@@ -3531,16 +3558,10 @@
         "properties": {
           "nombre": {
             "type": "string",
-            "maxLength": 100,
+            "maxLength": 150,
             "minLength": 2,
             "title": "Nombre",
-            "description": "Nombre o razón social."
-          },
-          "apellido": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 2,
-            "title": "Apellido"
+            "description": "Nombre y apellido, o razón social. Un solo campo."
           },
           "telefono": {
             "type": "string",
@@ -3622,7 +3643,6 @@
         "type": "object",
         "required": [
           "nombre",
-          "apellido",
           "telefono",
           "categoria_id",
           "dias_atencion",
@@ -3633,7 +3653,6 @@
         "title": "OferenteRegistro",
         "description": "Body de `POST /api/v1/oferentes` (HU-04, CA02 y CA03).",
         "example": {
-          "apellido": "Ludueña",
           "categoria_id": 1,
           "dias_atencion": [
             1,
@@ -3649,7 +3668,7 @@
           "hora_fin_atencion": "18:00",
           "hora_inicio_atencion": "08:00",
           "info_guardia": "Atiendo urgencias de lunes a sábado hasta las 22 h.",
-          "nombre": "Serena",
+          "nombre": "Serena Ludueña",
           "telefono": "3564-400111"
         }
       },
@@ -3683,6 +3702,12 @@
             "type": "boolean",
             "title": "Requiere Registro",
             "description": "true si es Oferente y todavía no completó el formulario de Profesional. El frontend lo manda a /registro.",
+            "default": false
+          },
+          "fidelizado": {
+            "type": "boolean",
+            "title": "Fidelizado",
+            "description": "HU-02: true si fidelizó al menos una matrícula.",
             "default": false
           }
         },
@@ -4014,6 +4039,47 @@
           "puntuacion_global": 4.75
         }
       },
+      "ResenasPaginadasOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ResenaPublicaOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Cantidad de opiniones aceptadas, sin paginar."
+          },
+          "pagina": {
+            "type": "integer",
+            "title": "Pagina",
+            "description": "Página devuelta, desde 1."
+          },
+          "por_pagina": {
+            "type": "integer",
+            "title": "Por Pagina",
+            "description": "Tamaño de página pedido."
+          },
+          "paginas": {
+            "type": "integer",
+            "title": "Paginas",
+            "description": "Cantidad de páginas con ese tamaño. 0 si el Profesional no tiene opiniones."
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "pagina",
+          "por_pagina",
+          "paginas"
+        ],
+        "title": "ResenasPaginadasOut",
+        "description": "Una página de la pestaña \"Opiniones\" del perfil público."
+      },
       "RolUsuario": {
         "type": "string",
         "enum": [
@@ -4330,6 +4396,30 @@
         ],
         "title": "SubidaOut"
       },
+      "TipoMatriculaOut": {
+        "properties": {
+          "tipo_profesional": {
+            "type": "string",
+            "title": "Tipo Profesional"
+          },
+          "digitos": {
+            "type": "integer",
+            "title": "Digitos"
+          },
+          "digitos_min": {
+            "type": "integer",
+            "title": "Digitos Min",
+            "default": 2
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo_profesional",
+          "digitos"
+        ],
+        "title": "TipoMatriculaOut",
+        "description": "Una opción del selector \"Tipo de profesional\", con el rango de\ndígitos que acepta su número de matrícula (multifuente). `digitos` se\nmantiene como máximo por compatibilidad."
+      },
       "Token": {
         "properties": {
           "access_token": {
@@ -4351,23 +4441,25 @@
       "TrabajoCreate": {
         "properties": {
           "titulo": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Titulo",
+            "description": "Obligatorio. Entre 1 y 100 caracteres."
+          },
+          "descripcion": {
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 100
+                "maxLength": 1000,
+                "minLength": 10
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Titulo"
-          },
-          "descripcion": {
-            "type": "string",
-            "maxLength": 1000,
-            "minLength": 10,
             "title": "Descripcion",
-            "description": "Obligatoria. Entre 10 y 1000 caracteres."
+            "description": "Opcional. Si se carga, entre 10 y 1000 caracteres."
           },
           "fotos": {
             "items": {
@@ -4381,11 +4473,11 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "descripcion",
+          "titulo",
           "fotos"
         ],
         "title": "TrabajoCreate",
-        "description": "Body de `POST /api/v1/oferentes/me/trabajos` (HU-04 T06, D13).\n\n`fotos` son los paths que devolvió la subida, **en el orden de carga**: la\nprimera es la foto principal (caso A50).",
+        "description": "Body de `POST /api/v1/oferentes/me/trabajos` (HU-04 T06, D13).\n\n`titulo` es obligatorio; `descripcion` es opcional (si se carga, entre 10 y\n1000 caracteres). `fotos` son los paths que devolvió\nla subida, **en el orden de carga**: la primera es la foto principal (caso A50).",
         "example": {
           "descripcion": "Reemplazo del disyuntor diferencial del tablero principal.",
           "fotos": [
@@ -4401,6 +4493,10 @@
             "title": "Id Trabajo"
           },
           "titulo": {
+            "type": "string",
+            "title": "Titulo"
+          },
+          "descripcion": {
             "anyOf": [
               {
                 "type": "string"
@@ -4409,10 +4505,6 @@
                 "type": "null"
               }
             ],
-            "title": "Titulo"
-          },
-          "descripcion": {
-            "type": "string",
             "title": "Descripcion"
           },
           "fecha_creacion": {
@@ -4444,7 +4536,7 @@
         "type": "object",
         "required": [
           "id_trabajo",
-          "descripcion",
+          "titulo",
           "fecha_creacion"
         ],
         "title": "TrabajoOut"
@@ -4512,6 +4604,12 @@
           "estado_cuenta": {
             "type": "string",
             "title": "Estado Cuenta"
+          },
+          "fidelizado": {
+            "type": "boolean",
+            "title": "Fidelizado",
+            "description": "HU-02: true si fidelizó al menos una matrícula.",
+            "default": false
           },
           "fecha_registro": {
             "type": "string",

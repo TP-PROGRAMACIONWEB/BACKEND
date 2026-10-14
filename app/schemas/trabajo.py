@@ -10,8 +10,9 @@ from app.schemas.oferente import TextoOpcional
 class TrabajoCreate(BaseModel):
     """Body de `POST /api/v1/oferentes/me/trabajos` (HU-04 T06, D13).
 
-    `fotos` son los paths que devolvió la subida, **en el orden de carga**: la
-    primera es la foto principal (caso A50).
+    `titulo` es obligatorio; `descripcion` es opcional (si se carga, entre 10 y
+    1000 caracteres). `fotos` son los paths que devolvió
+    la subida, **en el orden de carga**: la primera es la foto principal (caso A50).
     """
 
     model_config = ConfigDict(
@@ -26,8 +27,8 @@ class TrabajoCreate(BaseModel):
         },
     )
 
-    titulo: TextoOpcional = Field(default=None, max_length=100)
-    descripcion: str = Field(min_length=10, max_length=1000, description="Obligatoria. Entre 10 y 1000 caracteres.")
+    titulo: str = Field(min_length=1, max_length=100, description="Obligatorio. Entre 1 y 100 caracteres.")
+    descripcion: TextoOpcional = Field(default=None, min_length=10, max_length=1000, description="Opcional. Si se carga, entre 10 y 1000 caracteres.")
     fotos: list[str] = Field(description="Entre 1 y 5 paths, en el orden en que se cargaron.")
 
     @field_validator("fotos")
@@ -49,8 +50,8 @@ class FotoTrabajoOut(BaseModel):
 
 class TrabajoOut(BaseModel):
     id_trabajo: int
-    titulo: str | None = None
-    descripcion: str
+    titulo: str
+    descripcion: str | None = None
     fecha_creacion: datetime
     foto_principal_url: str | None = Field(default=None, description="Foto con orden 1. Es la que muestra la tarjeta.")
     fotos: list[FotoTrabajoOut] = Field(default_factory=list, description="Todas las fotos ordenadas. Alimenta el carrusel.")

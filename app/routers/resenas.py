@@ -1,7 +1,8 @@
+import math
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -11,6 +12,7 @@ from app.core.deps import get_current_user_opcional, get_oferente_registrado
 from app.core.errores import error_negocio, error_validacion
 from app.db.database import get_db
 from app.models.alerta_admin import AlertaAdministrador, EstadoRevisionAlerta
+from app.models.emision_resena import EmisionResena
 from app.models.oferente import Oferente
 from app.models.resena import EstadoResena, Resena
 from app.models.solicitud_resena import EstadoSolicitud, OrigenSolicitud, SolicitudResena
@@ -21,6 +23,7 @@ from app.schemas.resena import (
     ResenaOut,
     ResenaPrivadaOut,
     ResenaPublicaOut,
+    ResenasPaginadasOut,
     SolicitudResenaCreate,
     SolicitudResenaOut,
     SolicitudResenaVistaOut,
@@ -135,24 +138,37 @@ def _validar_no_auto_resena(oferente: Oferente, payload: SolicitudResenaCreate) 
 
 def _verificar_limites(db: Session, oferente_id: int, email_cliente: str | None) -> None:
     """Límites anti-spam: el endpoint es público y manda correos con la marca
-    Offix. Se cuentan en la base porque en Vercel no hay memoria compartida."""
+    Offix. Se cuentan emisiones (enlace nuevo o reenvío) en la base porque en
+    Vercel no hay memoria compartida."""
     desde = _ahora() - timedelta(hours=VENTANA_LIMITES_HORAS)
     if email_cliente:
         por_correo = (
-            db.query(func.count(SolicitudResena.id_solicitud))
-            .filter(SolicitudResena.email_cliente == email_cliente, SolicitudResena.fecha_generacion >= desde)
+            db.query(func.count(EmisionResena.id_emision))
+            .filter(EmisionResena.email_cliente == email_cliente, EmisionResena.fecha_emision >= desde)
             .scalar()
         )
         if por_correo >= settings.resena_limite_por_email_24h:
             raise error_negocio(429, "limite_solicitudes", "Ya se enviaron demasiados enlaces a ese correo en las últimas 24 horas")
 
     por_oferente = (
-        db.query(func.count(SolicitudResena.id_solicitud))
-        .filter(SolicitudResena.oferente_id == oferente_id, SolicitudResena.fecha_generacion >= desde)
+        db.query(func.count(EmisionResena.id_emision))
+        .filter(EmisionResena.oferente_id == oferente_id, EmisionResena.fecha_emision >= desde)
         .scalar()
     )
     if por_oferente >= settings.resena_limite_por_oferente_24h:
         raise error_negocio(429, "limite_solicitudes", "Este Profesional alcanzó el límite de enlaces de hoy")
+
+
+def _registrar_emision(db: Session, solicitud: SolicitudResena) -> None:
+    """Anota que salió un enlace (nuevo o reenvío) para que cuente en los límites."""
+    db.add(
+        EmisionResena(
+            solicitud_id=solicitud.id_solicitud,
+            oferente_id=solicitud.oferente_id,
+            email_cliente=solicitud.email_cliente,
+            fecha_emision=_ahora(),
+        )
+    )
 
 
 def _solicitud_vigente_para_correo(db: Session, oferente_id: int, email_cliente: str) -> SolicitudResena | None:
@@ -213,6 +229,10 @@ def generar_solicitud_resena(
     _validar_quien_genera(oferente, es_dueno, payload)
     _validar_no_auto_resena(oferente, payload)
 
+    # Antes de cualquier envío, también para el reenvío: si el límite solo se
+    # chequeara al crear, pedir el mismo enlace de nuevo mandaría correos sin tope.
+    _verificar_limites(db, oferente.id_oferente, payload.email_cliente)
+
     if payload.email_cliente:
         existente = _solicitud_vigente_para_correo(db, oferente.id_oferente, payload.email_cliente)
         if existente:
@@ -220,9 +240,9 @@ def generar_solicitud_resena(
                 _enviar_correo(email_service, existente, oferente)
             except EmailError as exc:
                 raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+            _registrar_emision(db, existente)
+            db.commit()
             return _respuesta_solicitud(existente, oferente, email_enviado=True)
-
-    _verificar_limites(db, oferente.id_oferente, payload.email_cliente)
 
     solicitud = SolicitudResena(
         oferente_id=oferente.id_oferente,
@@ -235,6 +255,7 @@ def generar_solicitud_resena(
     )
     db.add(solicitud)
     db.flush()
+    _registrar_emision(db, solicitud)
 
     # El correo es síncrono y crítico: si Brevo falla, no se crea la solicitud.
     email_enviado = False
@@ -366,29 +387,43 @@ def registrar_resena(payload: ResenaCreate, db: Session = Depends(get_db)):
 
 @router.get(
     "/oferentes/{oferente_id}/resenas",
-    response_model=list[ResenaPublicaOut],
-    summary="Opiniones aceptadas de un Profesional (público)",
+    response_model=ResenasPaginadasOut,
+    summary="Opiniones aceptadas de un Profesional, paginadas (público)",
+    responses={422: {"description": "`pagina` menor a 1, o `por_pagina` fuera de 1 a 10"}},
 )
-def listar_resenas_publicas(oferente_id: int, db: Session = Depends(get_db)):
+def listar_resenas_publicas(
+    oferente_id: int,
+    pagina: int = Query(1, ge=1, description="Número de página, desde 1."),
+    por_pagina: int = Query(5, ge=1, le=10, description="Opiniones por página: 5 o 10 según lo que elija el frontend."),
+    db: Session = Depends(get_db),
+):
     """RF7 / HU-01 T07 — Solo reseñas `Aceptada`, más nuevas primero. Sin datos
     de contacto del cliente y con el nombre reducido a "Juan C."."""
+    aceptadas = db.query(Resena).filter(Resena.oferente_id == oferente_id, Resena.estado == EstadoResena.ACEPTADA)
+    total = aceptadas.count()
     resenas = (
-        db.query(Resena)
-        .filter(Resena.oferente_id == oferente_id, Resena.estado == EstadoResena.ACEPTADA)
-        .order_by(Resena.fecha_creacion.desc(), Resena.id_resena.desc())
+        aceptadas.order_by(Resena.fecha_creacion.desc(), Resena.id_resena.desc())
+        .offset((pagina - 1) * por_pagina)
+        .limit(por_pagina)
         .all()
     )
-    return [
-        ResenaPublicaOut(
-            id_resena=resena.id_resena,
-            cliente=_nombre_publico(resena.nombre_cliente),
-            puntuacion_global=resena.calificaciones_comentarios["puntuacion_global"],
-            criterios=resena.calificaciones_comentarios["criterios"],
-            comentario=resena.calificaciones_comentarios.get("comentario"),
-            fecha_creacion=resena.fecha_creacion,
-        )
-        for resena in resenas
-    ]
+    return ResenasPaginadasOut(
+        items=[
+            ResenaPublicaOut(
+                id_resena=resena.id_resena,
+                cliente=_nombre_publico(resena.nombre_cliente),
+                puntuacion_global=resena.calificaciones_comentarios["puntuacion_global"],
+                criterios=resena.calificaciones_comentarios["criterios"],
+                comentario=resena.calificaciones_comentarios.get("comentario"),
+                fecha_creacion=resena.fecha_creacion,
+            )
+            for resena in resenas
+        ],
+        total=total,
+        pagina=pagina,
+        por_pagina=por_pagina,
+        paginas=math.ceil(total / por_pagina),
+    )
 
 
 @router.patch(

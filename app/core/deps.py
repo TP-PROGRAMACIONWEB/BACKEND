@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.database import get_db
 from app.models.oferente import Oferente
-from app.models.usuario import RolUsuario, Usuario
+from app.models.usuario import EstadoCuenta, RolUsuario, Usuario
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 # Para los endpoints que aceptan anónimos (calificar sin login, HU-01): sin
@@ -31,6 +31,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     usuario = db.get(Usuario, int(user_id))
     if usuario is None:
         raise credentials_exception
+    # El JWT es stateless: sin este chequeo, un token emitido antes de bloquear
+    # la cuenta seguiría sirviendo hasta vencer. Se valida en cada request.
+    if usuario.estado_cuenta != EstadoCuenta.ACTIVA:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="La cuenta no está activa",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return usuario
 
 

@@ -13,7 +13,7 @@ from pathlib import Path
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.database import SessionLocal, preparar_esquema
-from app.models import alerta_admin, archivo_adjunto, oferente_dia_atencion, trabajo_realizado  # noqa: F401 — registran sus mappers
+from app.models import alerta_admin, archivo_adjunto, emision_resena, oferente_dia_atencion, trabajo_realizado  # noqa: F401 — registran sus mappers
 from app.models.categoria import Categoria
 from app.models.matricula import PadronMatricula, TipoProfesionalMatricula
 from app.models.notificacion import Notificacion
