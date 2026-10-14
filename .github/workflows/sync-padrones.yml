@@ -1,0 +1,54 @@
+"""Sync mensual de padrones sin intervención manual (HU actualización BD matrículas).
+
+- Programado: día 1 de cada mes, 03:00 UTC (00:00 ART).
+- Manual: pestaña Actions > Sync padrones > Run workflow (elegís dry-run o real).
+- Corre scrapers web (GasNea, CACAAV, CAMTREC, Ecogas SF con Playwright) +
+  archivos versionados, y hace upsert a Supabase. Sin timeout de Vercel.
+
+Requisito (una sola vez): repo > Settings > Secrets and variables > Actions >
+New repository secret:
+  SUPABASE_DB_URL_SESSION = postgresql://...:5432/postgres  (puerto 5432
+  session, rol con escritura en schema offix; la contraseña URL-encodeada)
+"""
+
+name: Sync padrones de matrículas
+
+on:
+  schedule:
+    - cron: "0 3 1 * *"
+  workflow_dispatch:
+    inputs:
+      escribir:
+        description: "Escribir en la BD (false = solo reporte dry-run)"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: |
+          pip install -r requirements.txt
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Sync (dry-run de control)
+        if: github.event_name == 'workflow_dispatch' && inputs.escribir == 'false'
+        run: python -m app.scripts.actualizar_padron --fuente todas --incluir-ecogas --paginas 2 --dry-run
+
+      - name: Sync (escritura mensual)
+        if: github.event_name == 'schedule' || inputs.escribir == 'true'
+        run: python -m app.scripts.actualizar_padron --fuente todas --incluir-ecogas --paginas 2 --confirm
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL_SESSION }}
+          DATABASE_SCHEMA: offix
