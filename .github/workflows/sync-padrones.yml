@@ -1,15 +1,16 @@
-"""Sync mensual de padrones sin intervención manual (HU actualización BD matrículas).
-
-- Programado: día 1 de cada mes, 03:00 UTC (00:00 ART).
-- Manual: pestaña Actions > Sync padrones > Run workflow (elegís dry-run o real).
-- Corre scrapers web (GasNea, CACAAV, CAMTREC, Ecogas SF con Playwright) +
-  archivos versionados, y hace upsert a Supabase. Sin timeout de Vercel.
-
-Requisito (una sola vez): repo > Settings > Secrets and variables > Actions >
-New repository secret:
-  SUPABASE_DB_URL_SESSION = postgresql://...:5432/postgres  (puerto 5432
-  session, rol con escritura en schema offix; la contraseña URL-encodeada)
-"""
+# Sync mensual de padrones sin intervención manual (HU actualización BD matrículas).
+#
+# - Programado: día 1 de cada mes, 03:00 UTC (00:00 ART).
+# - Manual: pestaña Actions > Sync padrones > Run workflow (elegís dry-run o real).
+# - Carga por REST (service_role): no necesita database password ni toca Vercel.
+# - Corre scrapers web (GasNea, CAMTREC, Ecogas SF con Playwright) + archivos
+#   versionados, con upsert idempotente.
+#
+# Requisito (una sola vez): repo > Settings > Secrets and variables > Actions >
+# New repository secret (dos secrets):
+#   SUPABASE_URL = https://<ref>.supabase.co
+#   SUPABASE_SERVICE_ROLE = <jwt service_role>
+# Y en Supabase: schema `offix` expuesto en Data API con grants de escritura.
 
 name: Sync padrones de matrículas
 
@@ -44,11 +45,14 @@ jobs:
 
       - name: Sync (dry-run de control)
         if: github.event_name == 'workflow_dispatch' && inputs.escribir == 'false'
-        run: python -m app.scripts.actualizar_padron --fuente todas --incluir-ecogas --paginas 2 --dry-run
+        run: python -m app.scripts.cargar_padron_rest --fuente todas --incluir-ecogas --paginas 2 --dry-run
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
 
       - name: Sync (escritura mensual)
         if: github.event_name == 'schedule' || inputs.escribir == 'true'
-        run: python -m app.scripts.actualizar_padron --fuente todas --incluir-ecogas --paginas 2 --confirm
+        run: python -m app.scripts.cargar_padron_rest --fuente todas --incluir-ecogas --paginas 2 --confirm
         env:
-          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL_SESSION }}
-          DATABASE_SCHEMA: offix
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
