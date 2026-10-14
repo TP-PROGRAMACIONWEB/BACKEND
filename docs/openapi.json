@@ -10,6 +10,10 @@
   },
   "servers": [
     {
+      "url": "https://backend-offix3.vercel.app",
+      "description": "Producción (Vercel + Supabase)"
+    },
+    {
       "url": "http://localhost:8000",
       "description": "Entorno local (iniciar_backend.bat)"
     }
@@ -1543,6 +1547,183 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cron/padrones/sync": {
+      "post": {
+        "tags": [
+          "Cron Padrones"
+        ],
+        "summary": "Sync de padrones para cron-job.org",
+        "operationId": "sync_api_v1_cron_padrones_sync_post",
+        "parameters": [
+          {
+            "name": "secret",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Igual a CRON_SECRET en Vercel",
+              "title": "Secret"
+            },
+            "description": "Igual a CRON_SECRET en Vercel"
+          },
+          {
+            "name": "fuente",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "local|gasnea|cacaav|camtrec|ecogas|todas",
+              "default": "local",
+              "title": "Fuente"
+            },
+            "description": "local|gasnea|cacaav|camtrec|ecogas|todas"
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "True = solo reporte, no escribe",
+              "default": true,
+              "title": "Dry Run"
+            },
+            "description": "True = solo reporte, no escribe"
+          },
+          {
+            "name": "paginas",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5,
+              "minimum": 1,
+              "description": "Páginas por scraper web (límite serverless)",
+              "default": 1,
+              "title": "Paginas"
+            },
+            "description": "Páginas por scraper web (límite serverless)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Cron Padrones"
+        ],
+        "summary": "Sync de padrones para cron-job.org",
+        "operationId": "sync_api_v1_cron_padrones_sync_get",
+        "parameters": [
+          {
+            "name": "secret",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Igual a CRON_SECRET en Vercel",
+              "title": "Secret"
+            },
+            "description": "Igual a CRON_SECRET en Vercel"
+          },
+          {
+            "name": "fuente",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "local|gasnea|cacaav|camtrec|ecogas|todas",
+              "default": "local",
+              "title": "Fuente"
+            },
+            "description": "local|gasnea|cacaav|camtrec|ecogas|todas"
+          },
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "True = solo reporte, no escribe",
+              "default": true,
+              "title": "Dry Run"
+            },
+            "description": "True = solo reporte, no escribe"
+          },
+          {
+            "name": "paginas",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5,
+              "minimum": 1,
+              "description": "Páginas por scraper web (límite serverless)",
+              "default": 1,
+              "title": "Paginas"
+            },
+            "description": "Páginas por scraper web (límite serverless)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cron/padrones/health": {
+      "get": {
+        "tags": [
+          "Cron Padrones"
+        ],
+        "summary": "Chequeo cron",
+        "operationId": "cron_health_api_v1_cron_padrones_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }
@@ -3164,7 +3345,7 @@
           "numero_matricula": {
             "type": "string",
             "title": "Numero Matricula",
-            "description": "Solo dígitos. 10 para Gasista, 8 para Aire acondicionado."
+            "description": "Solo dígitos. Gasista 2-10 (10 local, cortas Ecogas/GasNea), Aire 8 exactos."
           }
         },
         "type": "object",
@@ -3173,7 +3354,7 @@
           "numero_matricula"
         ],
         "title": "ValidacionMatriculaIn",
-        "description": "Datos del bloque de fidelización del perfil: el botón Confirmar se\nhabilita recién con los dos campos completos y la cantidad de dígitos\ncorrecta para el tipo elegido.",
+        "description": "Datos del bloque de fidelización del perfil: el botón Confirmar se\nhabilita recién con los dos campos completos y la cantidad de dígitos\ndentro del rango de cada tipo (Gasista 2-10 multifuente, Aire 8 exactos).",
         "example": {
           "numero_matricula": "1000008919",
           "tipo_profesional": "Gasista"

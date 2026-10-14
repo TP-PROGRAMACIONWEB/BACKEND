@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.services.matriculas import DIGITOS_POR_TIPO
+from app.services.matriculas import RANGO_DIGITOS_POR_TIPO
 
 TipoProfesionalLiteral = Literal["Gasista", "Aire acondicionado"]
 
@@ -11,21 +11,23 @@ TipoProfesionalLiteral = Literal["Gasista", "Aire acondicionado"]
 class ValidacionMatriculaIn(BaseModel):
     """Datos del bloque de fidelización del perfil: el botón Confirmar se
     habilita recién con los dos campos completos y la cantidad de dígitos
-    correcta para el tipo elegido."""
+    dentro del rango de cada tipo (Gasista 2-10 multifuente, Aire 8 exactos)."""
 
     model_config = ConfigDict(json_schema_extra={"example": {"tipo_profesional": "Gasista", "numero_matricula": "1000008919"}})
 
     tipo_profesional: TipoProfesionalLiteral
-    numero_matricula: str = Field(description="Solo dígitos. 10 para Gasista, 8 para Aire acondicionado.")
+    numero_matricula: str = Field(description="Solo dígitos. Gasista 2-10 (10 local, cortas Ecogas/GasNea), Aire 8 exactos.")
 
     @model_validator(mode="after")
     def validar_numero(self):
         numero = self.numero_matricula.strip()
         if not numero.isdigit():
             raise ValueError("El número de matrícula solo puede tener dígitos")
-        esperados = DIGITOS_POR_TIPO[self.tipo_profesional]
-        if len(numero) != esperados:
-            raise ValueError(f"El número de matrícula de {self.tipo_profesional} debe tener {esperados} dígitos")
+        minimo, maximo = RANGO_DIGITOS_POR_TIPO[self.tipo_profesional]
+        if not (minimo <= len(numero) <= maximo):
+            if minimo == maximo:
+                raise ValueError(f"El número de matrícula de {self.tipo_profesional} debe tener {maximo} dígitos")
+            raise ValueError(f"El número de matrícula de {self.tipo_profesional} debe tener entre {minimo} y {maximo} dígitos")
         self.numero_matricula = numero
         return self
 

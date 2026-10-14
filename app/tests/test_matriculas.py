@@ -56,10 +56,24 @@ def test_numero_con_cantidad_de_digitos_incorrecta_da_422(client, db_session):
     token, _ = crear_oferente(client, db_session, "gasista1@test.com", "Maria Clara", "Alessi", "20-11111111-1")
     respuesta = client.post(
         "/api/v1/oferentes/me/matriculas/validaciones",
-        json={"tipo_profesional": "Gasista", "numero_matricula": "123"},
+        json={"tipo_profesional": "Gasista", "numero_matricula": "1"},
         headers=auth(token),
     )
     assert respuesta.status_code == 422
+
+
+def test_numero_corto_multifuente_valida(client, db_session):
+    """Ecogas San Francisco usa esquemas cortos (ej. 3753): con el rango 2-10
+    pasan el formato y validan si están en el padrón con nombre coincidente."""
+    crear_fila_padron(db_session, numero="3753", nombre="JUAN PEREZ")
+    token, _ = crear_oferente(client, db_session, "gasista_corto@test.com", "Juan", "Perez", "20-22222222-2")
+    respuesta = client.post(
+        "/api/v1/oferentes/me/matriculas/validaciones",
+        json={"tipo_profesional": "Gasista", "numero_matricula": "3753"},
+        headers=auth(token),
+    )
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json()["resultado"] == "Validada"
 
 
 def test_numero_con_letras_da_422(client, db_session):

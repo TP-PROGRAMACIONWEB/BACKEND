@@ -16,7 +16,7 @@ from app.models.matricula import PadronMatricula
 from app.services.padrones import parsear_padron_json, parsear_padron_md
 from app.services.scrapers.base import FilaPadronExterna, normalizar_texto
 
-DIGITOS = {"Gasista": (6, 10), "Aire acondicionado": (8, 8)}
+DIGITOS = {"Gasista": (2, 10), "Aire acondicionado": (8, 8)}
 
 
 def _log_dir() -> Path:

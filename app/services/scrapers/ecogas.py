@@ -27,41 +27,41 @@ from app.services.scrapers.base import FilaPadronExterna
 URL = "https://www.ecogas.com.ar/hogares-comercios/tramites-y-servicios/listado-de-gasistas-matriculados"
 
 
+def _categoria_desde_token(token: str) -> str:
+    t = token.strip().upper()
+    return {"1": "Primera", "M1": "Primera", "2": "Segunda", "M2": "Segunda", "3": "Tercera", "M3": "Tercera"}.get(t, token.strip() or "Primera")
+
+
 def parsear_html_guardado(html: str, fuente: str = URL) -> list[FilaPadronExterna]:
-    """Parsea un HTML ya con resultados (guardado manual o desde Playwright)."""
+    """Parsea la tabla de Ecogas por columnas (TH): N° Matrícula | Nombre y
+    Apellido | Categoría (1/2/3) | Provincia | Localidad | Correo | Teléfono."""
     soup = BeautifulSoup(html, "html.parser")
     filas: list[FilaPadronExterna] = []
-    for tr in soup.find_all("tr"):
-        celdas = [c.get_text(" ", strip=True) for c in tr.find_all(["td", "th"])]
-        if not celdas:
+    for tabla in soup.find_all("table"):
+        ths = [th.get_text(" ", strip=True).upper() for th in tabla.find_all("th")]
+        if not any("MATR" in h for h in ths):
             continue
-        texto = " | ".join(celdas)
-        # Busca matrícula: 6-10 dígitos (Ecogas Centro usa 10 tipo 10000xxxxx
-        # en nuestro padrón actual; GasNea usa 3-4).
-        nums = re.findall(r"\b(\d{6,10})\b", texto)
-        if not nums:
-            continue
-        numero = max(nums, key=len)  # prefiere la más larga (matrícula vs teléfono)
-        if not (6 <= len(numero) <= 10):
-            continue
-        nombre = celdas[0].strip().upper()[:200]
-        if not nombre or "NOMBRE" in nombre:
-            continue
-        cat = next((c for c in celdas if re.search(r"Primera|Segunda|Tercera|M[123]|Cat", c, re.I)), "Primera")
-        cat = re.sub(r".*(Primera|Segunda|Tercera).*", r"\1", cat, flags=re.I)
-        if cat.upper().startswith("M"):
-            cat = {"M1": "Primera", "M2": "Segunda", "M3": "Tercera"}.get(cat.upper(), cat)
-        filas.append(
-            FilaPadronExterna(
-                tipo_profesional="Gasista",
-                numero_matricula=numero,
-                nombre_matriculado=nombre,
-                categoria=cat,
-                fecha_vencimiento=date(2027, 3, 31),
-                fuente=fuente,
+        idx_mat = next((i for i, h in enumerate(ths) if "MATR" in h), 0)
+        idx_nom = next((i for i, h in enumerate(ths) if "NOMBRE" in h), 1)
+        idx_cat = next((i for i, h in enumerate(ths) if "CATEGOR" in h), 2)
+        for tr in tabla.find_all("tr"):
+            tds = [c.get_text(" ", strip=True) for c in tr.find_all("td")]
+            if len(tds) <= max(idx_mat, idx_nom, idx_cat):
+                continue
+            numero = re.sub(r"\D", "", tds[idx_mat])
+            nombre = re.sub(r"\s+", " ", tds[idx_nom]).strip().upper()[:200]
+            if not numero or not nombre:
+                continue
+            filas.append(
+                FilaPadronExterna(
+                    tipo_profesional="Gasista",
+                    numero_matricula=numero,
+                    nombre_matriculado=nombre,
+                    categoria=_categoria_desde_token(tds[idx_cat]),
+                    fecha_vencimiento=date(2027, 3, 31),
+                    fuente=fuente,
+                )
             )
-        )
-    # Dedup.
     unicas = {}
     for f in filas:
         unicas[(f.tipo_profesional, f.numero_matricula)] = f

@@ -28,6 +28,16 @@ DIGITOS_POR_TIPO = {
     "Aire acondicionado": 8,
 }
 
+# Rango aceptado por tipo (multifuente): el padrón local de Gasistas usa 10
+# dígitos (100000 + número Ecogas), pero Ecogas San Francisco y GasNea usan
+# esquemas cortos (2-4 dígitos, ej. 3753, 579). El gate real es la existencia
+# en el padrón, no el largo: el rango solo frena basura (1 dígito, teléfonos
+# con guiones, etc.). Aire sigue exacto en 8 (DNI).
+RANGO_DIGITOS_POR_TIPO = {
+    "Gasista": (2, 10),
+    "Aire acondicionado": (8, 8),
+}
+
 MATRICULAS_TRAMPA = {
     "Gasista": "9999999999",
     "Aire acondicionado": "99999999",
