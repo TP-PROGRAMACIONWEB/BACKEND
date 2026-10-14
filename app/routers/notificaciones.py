@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user
+from app.core.deps import get_usuario_registrado
 from app.db.database import get_db
 from app.models.matricula import Matricula, ValidacionMatricula
 from app.models.notificacion import EstadoNotificacion, Notificacion
@@ -33,7 +33,7 @@ def _armar_salida(db: Session, notificacion: Notificacion) -> NotificacionOut:
         validacion = db.get(ValidacionMatricula, notificacion.validacion_matricula_id)
         if validacion:
             oferente = db.get(Oferente, validacion.oferente_id)
-            oferente_nombre = f"{oferente.nombre} {oferente.apellido}" if oferente else None
+            oferente_nombre = oferente.nombre if oferente else None
             tipo_profesional = validacion.tipo_profesional
             numero_solicitada = validacion.numero_matricula
             matricula_vigente = (
@@ -71,7 +71,7 @@ def _armar_salida(db: Session, notificacion: Notificacion) -> NotificacionOut:
 )
 def listar_notificaciones(
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(get_current_user),
+    usuario: Usuario = Depends(get_usuario_registrado),
 ):
     """HU-01 / CA04 — Lo que se despliega al abrir la campana, **más recientes
     primero**. Cada tarjeta de reseña muestra los datos de contacto que cargó el
@@ -95,7 +95,7 @@ def listar_notificaciones(
 )
 def contar_notificaciones(
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(get_current_user),
+    usuario: Usuario = Depends(get_usuario_registrado),
 ):
     """Solo cuenta las del usuario autenticado. Devuelve las dos cifras
     (pendientes de decisión y total sin leer) mientras siga abierta la
@@ -123,7 +123,7 @@ def contar_notificaciones(
 def marcar_leida(
     notificacion_id: int,
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(get_current_user),
+    usuario: Usuario = Depends(get_usuario_registrado),
 ):
     """Cierre de las informativas (los resultados de validación de matrícula),
     que quedan guardadas en la campana hasta que el Profesional las abre. Las

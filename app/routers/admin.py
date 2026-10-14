@@ -13,10 +13,11 @@ from app.models.oferente import EstadoVerificacion, Oferente
 from app.models.resena import EstadoResena, Resena
 from app.models.usuario import EstadoCuenta, Usuario
 from app.schemas.matricula import ReemplazoResolucionIn, ReemplazoResueltoOut
-from app.schemas.oferente import OferenteOut
+from app.schemas.oferente import OferentePrivadoOut
 from app.schemas.resena import ResenaAdminOut
 from app.schemas.usuario import UsuarioOut
 from app.services.matriculas import resolver_reemplazo
+from app.services.oferentes import armar_privada
 from app.services.resenas import recalcular_promedio
 
 RESPUESTAS_ADMIN_COMUNES = {
@@ -70,7 +71,7 @@ def cambiar_estado_usuario(usuario_id: int, estado: EstadoCuentaEnum, db: Sessio
 
 @router.patch(
     "/oferentes/{oferente_id}/verificacion",
-    response_model=OferenteOut,
+    response_model=OferentePrivadoOut,
     summary="Marcar manualmente el estado de verificación de matrícula",
     responses={404: {"description": "Oferente no encontrado"}},
 )
@@ -86,7 +87,7 @@ def actualizar_estado_verificacion(oferente_id: int, estado_verificacion: Estado
     oferente.estado_verificacion = estado_verificacion.value
     db.commit()
     db.refresh(oferente)
-    return oferente
+    return armar_privada(db, oferente)
 
 
 @router.get("/alertas", summary="Listar alertas generadas por rechazos reiterados de reseñas")

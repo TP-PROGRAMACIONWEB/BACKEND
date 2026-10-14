@@ -16,28 +16,22 @@ from app.models.resena import Resena
 from app.models.solicitud_resena import SolicitudResena
 
 
-def _contacto_legible(solicitud: SolicitudResena) -> str:
-    """Los dos datos si se cargaron los dos: el Profesional los usa para
-    verificar la identidad del cliente antes de aceptar."""
-    datos = [dato for dato in (solicitud.telefono_cliente, solicitud.email_cliente) if dato]
-    return " / ".join(datos)
+def _contacto_del_cliente(solicitud: SolicitudResena) -> str:
+    """Teléfono si se cargó; si no, el correo (texto literal de QA, caso A34)."""
+    return solicitud.telefono_cliente or solicitud.email_cliente or ""
 
 
 def crear_notificacion_resena_nueva(db: Session, resena: Resena, solicitud: SolicitudResena) -> Notificacion:
     """Avisa al Profesional que tiene una reseña esperando su decisión.
 
-    El mensaje lleva **los datos de contacto y nada del contenido** de la
-    reseña: el Profesional decide mirando quién la dejó, no qué dice.
-    La fecha es la de creación de la reseña por el cliente, no la de la
-    moderación (requisito explícito de los casos de prueba de QA).
+    El mensaje lleva **el contacto del cliente y nada del contenido** de la
+    reseña: el Profesional decide mirando quién la dejó, no qué dice. La fecha
+    es la de creación de la reseña por el cliente, no la de la moderación.
     """
     notificacion = Notificacion(
         usuario_id=resena.oferente_id,
         tipo=TipoNotificacion.RESENA_NUEVA,
-        mensaje=(
-            f"{solicitud.nombre_cliente} ({_contacto_legible(solicitud)}) dejó una reseña sobre tu trabajo. "
-            "Revisá los datos de contacto y decidí si la aceptás."
-        ),
+        mensaje=f"Recibiste una nueva reseña de un cliente {_contacto_del_cliente(solicitud)} a través de Offix.",
         requiere_accion=True,
         estado=EstadoNotificacion.PENDIENTE,
         resena_id=resena.id_resena,

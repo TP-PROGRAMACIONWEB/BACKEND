@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Offix API",
-    "description": "API REST del backend de Offix, red social de oficios (UTN FRSF).\n\n### Cómo autenticarse\n1. `POST /api/v1/auth/registro` para crear un usuario.\n2. `POST /api/v1/auth/login` para obtener un `access_token` (JWT).\n3. Enviarlo en cada request protegida como header `Authorization: Bearer <access_token>` (en Swagger UI: botón **Authorize**, arriba a la derecha).\n\n### Para el equipo de QA (Hoppscotch)\nEl spec completo también está disponible en `/openapi.json` y como archivo estático en `docs/openapi.json` del repo — se puede importar directo en Hoppscotch como colección.\n\n### Estado del proyecto\nSprint 1 — flujo de reseña (HU-01): el enlace se genera desde el perfil público y se envía por WhatsApp (link `wa.me` con el mensaje precargado) y/o por correo. Ver `docs/plan-sprint-1.md` para el detalle de alcance y decisiones.",
+    "description": "API REST del backend de Offix, red social de oficios (UTN FRSF).\n\n### Cómo autenticarse\n1. `POST /api/v1/auth/registro` para crear un usuario.\n2. `POST /api/v1/auth/login` para obtener un `access_token` (JWT).\n3. Enviarlo en cada request protegida como header `Authorization: Bearer <access_token>` (en Swagger UI: botón **Authorize**, arriba a la derecha).\n\n### Para el equipo de QA (Hoppscotch)\nEl spec completo también está disponible en `/openapi.json` y como archivo estático en `docs/openapi.json` del repo — se puede importar directo en Hoppscotch como colección.\n\n### Estado del proyecto\nSprint 2 — registro de Profesional (HU-04) con perfil público y privado, fotos y trabajos realizados en Supabase Storage, y reseñas con las reglas de HU-01 v1.2. Ver `docs/plan-sprint-2.md` para el detalle de alcance y decisiones.",
     "contact": {
       "name": "Equipo Offix - UTN FRSF"
     },
@@ -140,8 +140,8 @@
         "tags": [
           "Autenticación"
         ],
-        "summary": "Perfil del usuario autenticado (nombre y correo)",
-        "description": "HU-03 / CA02 — Lo que muestra la vista \"Perfil del usuario\" al volver del\nlogin: nombre, correo y nada más. El perfil de Oferente (categoría, fotos,\netc.) es otra HU y se consulta aparte con `GET /oferentes/{id}`.",
+        "summary": "Perfil del usuario autenticado (nombre, correo y si falta el registro)",
+        "description": "HU-03 / CA02 — Lo que muestra la vista \"Perfil del usuario\" al volver del\nlogin. HU-04 agrega `requiere_registro`: un Oferente sin fila de Profesional\ntiene que completar el formulario antes de navegar al resto de la app (CA01).",
         "operationId": "perfil_actual_api_v1_auth_me_get",
         "responses": {
           "200": {
@@ -274,13 +274,35 @@
         }
       }
     },
+    "/api/v1/catalogos/registro-oferente": {
+      "get": {
+        "tags": [
+          "Catálogos"
+        ],
+        "summary": "Opciones del formulario de registro de Profesional (público)",
+        "description": "HU-04 — Una sola llamada llena categorías, rangos de experiencia, días,\nhorario por defecto y los límites de trabajos realizados. Solo se listan las\ncategorías activas.",
+        "operationId": "catalogo_registro_oferente_api_v1_catalogos_registro_oferente_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogoRegistroOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/oferentes": {
       "get": {
         "tags": [
           "Oferentes"
         ],
         "summary": "Buscar profesionales (público)",
-        "description": "RF7/RF8 — Búsqueda y consulta pública de perfiles profesionales. No requiere login.",
+        "description": "RF7/RF8 — Búsqueda pública. Excluye las cuentas suspendidas o bloqueadas\n(observación F4 de QA): un Profesional suspendido no aparece.",
         "operationId": "buscar_oferentes_api_v1_oferentes_get",
         "parameters": [
           {
@@ -328,7 +350,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/OferenteOut"
+                    "$ref": "#/components/schemas/OferentePublicoOut"
                   },
                   "title": "Response Buscar Oferentes Api V1 Oferentes Get"
                 }
@@ -351,8 +373,8 @@
         "tags": [
           "Oferentes"
         ],
-        "summary": "Crear el perfil profesional del usuario autenticado",
-        "description": "RF2/HU-02 — Creación del perfil profesional del oferente. El\n`id_oferente` resultante es siempre igual al `id_usuario` del usuario\nautenticado (comparten clave primaria).",
+        "summary": "Confirmar el registro de Profesional (CA02/CA03)",
+        "description": "HU-04 — Crea el perfil del Oferente y sus días de atención en una sola\ntransacción. Si el formulario tiene errores, responde 422 con **todos** los\ncampos a la vez (CA02). Si abandonan el formulario, no se persiste nada (CA06).",
         "operationId": "crear_perfil_oferente_api_v1_oferentes_post",
         "security": [
           {
@@ -364,7 +386,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/OferenteCreate"
+                "$ref": "#/components/schemas/OferenteRegistro"
               }
             }
           }
@@ -375,7 +397,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OferenteOut"
+                  "$ref": "#/components/schemas/OferentePrivadoOut"
                 }
               }
             }
@@ -384,15 +406,95 @@
             "description": "Falta token o es inválido"
           },
           "403": {
-            "description": "El usuario autenticado no tiene rol Oferente"
+            "description": "El usuario es Administrador (`rol_invalido`) o no tiene perfil (`registro_incompleto`)"
           },
           "409": {
-            "description": "El usuario ya tiene perfil, o el DNI/CUIT ya está registrado"
+            "description": "Ya completó el registro (`perfil_existente`) o el DNI/CUIT ya existe (`dni_cuit_duplicado`)"
           },
           "422": {
-            "description": "Campo obligatorio faltante o DNI/CUIT/teléfono con formato inválido"
+            "description": "Errores de validación. `errores[]` trae todos los campos a corregir"
           }
         }
+      }
+    },
+    "/api/v1/oferentes/me": {
+      "get": {
+        "tags": [
+          "Oferentes"
+        ],
+        "summary": "Mi perfil profesional completo",
+        "description": "HU-04 CA04 — Perfil del dueño: incluye DNI/CUIT, que nadie más ve (D7).",
+        "operationId": "obtener_mi_perfil_api_v1_oferentes_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OferentePrivadoOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "El usuario es Administrador (`rol_invalido`) o no tiene perfil (`registro_incompleto`)"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Oferentes"
+        ],
+        "summary": "Editar mi perfil profesional (sin DNI/CUIT ni correo)",
+        "description": "HU-04 (D18) — Todos los campos son opcionales. El DNI/CUIT y el correo no\nse cambian: se rechazan o se ignoran.",
+        "operationId": "actualizar_mi_perfil_api_v1_oferentes_me_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OferenteEdicion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OferentePrivadoOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "El usuario es Administrador (`rol_invalido`) o no tiene perfil (`registro_incompleto`)"
+          },
+          "409": {
+            "description": "Cambio de nombre con una matrícula fidelizada (`nombre_bloqueado_por_matricula`)"
+          },
+          "422": {
+            "description": "Errores de validación, o un campo que no se puede editar (dni_cuit)"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/v1/oferentes/{oferente_id}": {
@@ -401,7 +503,7 @@
           "Oferentes"
         ],
         "summary": "Consultar el perfil de un profesional (público)",
-        "description": "RF7 — Consulta pública de perfil profesional. No requiere login.",
+        "description": "RF7 — Perfil público. No devuelve DNI/CUIT, estado de verificación ni\nrechazos acumulados.",
         "operationId": "obtener_oferente_api_v1_oferentes__oferente_id__get",
         "parameters": [
           {
@@ -420,7 +522,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OferenteOut"
+                  "$ref": "#/components/schemas/OferentePublicoOut"
                 }
               }
             }
@@ -444,8 +546,8 @@
         "tags": [
           "Oferentes"
         ],
-        "summary": "Editar el perfil profesional propio",
-        "description": "RF2 — Edición del perfil profesional. Solo el dueño puede editarlo.",
+        "summary": "Editar el perfil propio (alias de compatibilidad de PUT /me)",
+        "description": "Se mantiene por compatibilidad con los llamados de Sprint 1. Delega en la\nmisma lógica que `PUT /oferentes/me` y solo acepta el propio `id`.",
         "operationId": "actualizar_perfil_oferente_api_v1_oferentes__oferente_id__put",
         "security": [
           {
@@ -468,7 +570,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/OferenteUpdate"
+                "$ref": "#/components/schemas/OferenteEdicion"
               }
             }
           }
@@ -479,7 +581,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OferenteOut"
+                  "$ref": "#/components/schemas/OferentePrivadoOut"
                 }
               }
             }
@@ -488,10 +590,337 @@
             "description": "Falta token o es inválido"
           },
           "403": {
-            "description": "El usuario autenticado no es el dueño del perfil"
+            "description": "El perfil no es el del usuario autenticado"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/oferentes/me/archivos/subidas": {
+      "post": {
+        "tags": [
+          "Oferentes"
+        ],
+        "summary": "Pedir una URL firmada para subir una imagen (paso 1)",
+        "description": "HU-04 T06 — Valida tipo y tamaño antes de firmar, para dar el error\ntemprano. El navegador después sube el archivo directo a `upload_url`, y\nluego confirma con el endpoint que corresponda usando el `path`.",
+        "operationId": "pedir_subida_api_v1_oferentes_me_archivos_subidas_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubidaIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubidaOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "Falta completar el registro de Profesional (`registro_incompleto`)"
+          },
+          "422": {
+            "description": "Formato distinto de JPG/PNG, más de 5 MB, o un path que no corresponde (`archivo_invalido`)"
+          },
+          "503": {
+            "description": "Supabase Storage no está configurado"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/oferentes/me/foto-perfil": {
+      "put": {
+        "tags": [
+          "Oferentes"
+        ],
+        "summary": "Confirmar la foto de perfil (paso 3)",
+        "description": "Reemplaza la foto anterior. Vuelve a verificar el objeto real en Storage.",
+        "operationId": "confirmar_foto_perfil_api_v1_oferentes_me_foto_perfil_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchivoRefIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OferentePrivadoOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "Falta completar el registro de Profesional (`registro_incompleto`)"
+          },
+          "422": {
+            "description": "Formato distinto de JPG/PNG, más de 5 MB, o un path que no corresponde (`archivo_invalido`)"
+          },
+          "503": {
+            "description": "Supabase Storage no está configurado"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Oferentes"
+        ],
+        "summary": "Quitar la foto de perfil (vuelve a las iniciales)",
+        "operationId": "quitar_foto_perfil_api_v1_oferentes_me_foto_perfil_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "Falta completar el registro de Profesional (`registro_incompleto`)"
+          },
+          "422": {
+            "description": "Formato distinto de JPG/PNG, más de 5 MB, o un path que no corresponde (`archivo_invalido`)"
+          },
+          "503": {
+            "description": "Supabase Storage no está configurado"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/oferentes/me/portada": {
+      "put": {
+        "tags": [
+          "Oferentes"
+        ],
+        "summary": "Confirmar la imagen de portada (paso 3)",
+        "operationId": "confirmar_portada_api_v1_oferentes_me_portada_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchivoRefIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OferentePrivadoOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "Falta completar el registro de Profesional (`registro_incompleto`)"
+          },
+          "422": {
+            "description": "Formato distinto de JPG/PNG, más de 5 MB, o un path que no corresponde (`archivo_invalido`)"
+          },
+          "503": {
+            "description": "Supabase Storage no está configurado"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/oferentes/{oferente_id}/trabajos": {
+      "get": {
+        "tags": [
+          "Oferentes"
+        ],
+        "summary": "Trabajos realizados de un Profesional (público)",
+        "description": "HU-04 T06 — Más nuevos primero. Cada trabajo trae la foto principal y la\nlista completa de fotos ordenadas, así la tarjeta y el carrusel no necesitan\nun segundo request.",
+        "operationId": "listar_trabajos_api_v1_oferentes__oferente_id__trabajos_get",
+        "parameters": [
+          {
+            "name": "oferente_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Oferente Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrabajoOut"
+                  },
+                  "title": "Response Listar Trabajos Api V1 Oferentes  Oferente Id  Trabajos Get"
+                }
+              }
+            }
           },
           "404": {
             "description": "Oferente no encontrado"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/oferentes/me/trabajos": {
+      "post": {
+        "tags": [
+          "Oferentes"
+        ],
+        "summary": "Cargar un trabajo realizado con sus fotos",
+        "description": "HU-04 T06 — Obligatorios: al menos una foto y la descripción. El título es\nopcional. Las fotos se guardan en el orden del body; la primera es la principal.",
+        "operationId": "cargar_trabajo_api_v1_oferentes_me_trabajos_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrabajoCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrabajoOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "Falta completar el registro de Profesional (`registro_incompleto`)"
+          },
+          "409": {
+            "description": "Ya hay 5 trabajos cargados (`limite_trabajos`)"
+          },
+          "422": {
+            "description": "Sin descripción, fotos fuera de rango, o una foto que no corresponde"
+          },
+          "503": {
+            "description": "Supabase Storage no está configurado"
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/oferentes/me/trabajos/{id_trabajo}": {
+      "delete": {
+        "tags": [
+          "Oferentes"
+        ],
+        "summary": "Borrar un trabajo realizado (filas y fotos)",
+        "description": "Caso A53 — Borra las filas y los objetos de Storage. Un trabajo ajeno da\n404, para no revelar que existe.",
+        "operationId": "borrar_trabajo_api_v1_oferentes_me_trabajos__id_trabajo__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id_trabajo",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Id Trabajo"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Falta token o es inválido"
+          },
+          "403": {
+            "description": "Falta completar el registro de Profesional (`registro_incompleto`)"
+          },
+          "404": {
+            "description": "No existe un trabajo tuyo con ese id"
+          },
+          "503": {
+            "description": "Supabase Storage no está configurado"
           },
           "422": {
             "description": "Validation Error",
@@ -703,9 +1132,14 @@
         "tags": [
           "Reseñas"
         ],
-        "summary": "Generar el enlace de reseña desde el perfil público (HU-01, sin login)",
-        "description": "RF10 / HU-01 — Cualquiera que esté en el perfil público presiona\n\"Calificar\", carga los **Datos del Cliente** y genera el enlace. No hace\nfalta estar logueado: el botón lo ve tanto un cliente como el propio\nProfesional.\n\nEl canal lo define el dato cargado:\n\n- **teléfono** → se devuelve la `whatsapp_url` con el mensaje precargado;\n  el envío lo dispara una persona presionando \"enviar\" en WhatsApp;\n- **correo** → se manda el mail con el mismo texto;\n- **los dos** → se hacen las dos cosas.",
+        "summary": "Generar el enlace de reseña desde el perfil público (HU-01)",
+        "description": "RF10 / HU-01 — Cualquiera que esté en el perfil público presiona\n\"Calificar\" y carga los **Datos del Cliente**. No hace falta estar logueado.\n\nQué contacto se acepta depende de quién lo pide (D8):\n\n- **anónimo u otro usuario** → solo correo, obligatorio;\n- **el Profesional dueño** → teléfono, correo o los dos. Con teléfono se\n  devuelve la `whatsapp_url` con el mensaje precargado; con correo se manda\n  el mail.",
         "operationId": "generar_solicitud_resena_api_v1_oferentes__oferente_id__solicitudes_resena_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "oferente_id",
@@ -738,11 +1172,17 @@
               }
             }
           },
+          "401": {
+            "description": "Llegó un token inválido"
+          },
           "404": {
             "description": "Oferente no encontrado"
           },
           "422": {
-            "description": "Falta el nombre, no se cargó ningún contacto, o el teléfono tiene formato inválido"
+            "description": "Contacto que no corresponde a quien genera (`telefono_no_permitido`, `email_requerido`, `contacto_requerido`), o autocalificación (`contacto_propio`)"
+          },
+          "429": {
+            "description": "Superó el límite de enlaces por correo o por Profesional en 24 h (`limite_solicitudes`)"
           },
           "502": {
             "description": "No se pudo enviar el correo con el enlace"
@@ -802,7 +1242,7 @@
           "Reseñas"
         ],
         "summary": "Registrar una reseña (público, sin login)",
-        "description": "RF10 — El cliente deja la reseña accediendo con el `codigo_unico` del\nenlace, sin loguearse. Los datos del cliente **no viajan en el body**: se\ncopian de la solicitud, que es donde quedaron registrados al generar el\nenlace. Queda en `Pendiente_Aceptacion` y, en la misma transacción, se crea\nla notificación en la bandeja del Profesional, que es donde la resuelve.",
+        "description": "RF10 — El cliente deja la reseña con el `codigo_unico` del enlace, sin\nloguearse. Los datos del cliente salen de la solicitud, no del body. Queda en\n`Pendiente_Aceptacion` y, en la misma transacción, se crea la notificación en\nla bandeja del Profesional.\n\nLa solicitud pasa a `Utilizada` con un UPDATE condicional: si dos envíos\nllegan a la vez, solo uno gana y el otro recibe `enlace_utilizado`.",
         "operationId": "registrar_resena_api_v1_resenas_post",
         "requestBody": {
           "content": {
@@ -826,7 +1266,7 @@
             }
           },
           "400": {
-            "description": "El enlace no existe, ya se usó o venció"
+            "description": "El enlace no existe (`enlace_inexistente`), ya se usó (`enlace_utilizado`) o venció (`enlace_vencido`)"
           },
           "422": {
             "description": "Falta un criterio, está fuera de escala, o el comentario supera los 200 caracteres"
@@ -839,8 +1279,8 @@
         "tags": [
           "Reseñas"
         ],
-        "summary": "Listar reseñas aceptadas de un oferente (público)",
-        "description": "RF7 — Solo devuelve reseñas en estado `Aceptada`; las pendientes y\nrechazadas no son visibles públicamente ni suman al promedio.",
+        "summary": "Opiniones aceptadas de un Profesional (público)",
+        "description": "RF7 / HU-01 T07 — Solo reseñas `Aceptada`, más nuevas primero. Sin datos\nde contacto del cliente y con el nombre reducido a \"Juan C.\".",
         "operationId": "listar_resenas_publicas_api_v1_oferentes__oferente_id__resenas_get",
         "parameters": [
           {
@@ -861,7 +1301,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/ResenaOut"
+                    "$ref": "#/components/schemas/ResenaPublicaOut"
                   },
                   "title": "Response Listar Resenas Publicas Api V1 Oferentes  Oferente Id  Resenas Get"
                 }
@@ -887,7 +1327,7 @@
           "Reseñas"
         ],
         "summary": "Aceptar o rechazar una reseña pendiente desde la bandeja",
-        "description": "RF11/RF13 — El Profesional resuelve desde la campana la reseña que le\nllegó. Al **aceptar**, la reseña se publica en el perfil y se recalcula el\npromedio; al **rechazar**, no se publica ni suma al promedio. En las dos\nramas se cierra la notificación asociada **en la misma transacción**.\n\nSi se rechazan 5 o más de las últimas 10 reseñas del oferente, se genera\nautomáticamente una `AlertaAdministrador` (RF11) visible en\n`GET /admin/alertas`.\n\nLa respuesta incluye el contacto del cliente: la ve solo el dueño.",
+        "description": "RF11/RF13 — El Profesional resuelve desde la campana la reseña que le\nllegó. Al **aceptar**, la reseña se publica y se recalcula el promedio; al\n**rechazar**, no se publica ni suma al promedio. En las dos ramas se cierra la\nnotificación asociada **en la misma transacción**.\n\nSi se rechazan 5 o más de las últimas 10 reseñas, se genera una\n`AlertaAdministrador`. Mientras haya una alerta pendiente, no se crea otra.\n\nLa respuesta incluye el contacto del cliente: la ve solo el dueño.",
         "operationId": "moderar_resena_api_v1_resenas__resena_id__moderar_patch",
         "security": [
           {
@@ -927,13 +1367,13 @@
             }
           },
           "400": {
-            "description": "La reseña ya fue moderada (no está Pendiente_Aceptacion)"
+            "description": "La reseña ya fue moderada (`resena_ya_moderada`)"
           },
           "401": {
             "description": "Falta token o es inválido"
           },
           "403": {
-            "description": "El oferente autenticado no es el dueño de la reseña"
+            "description": "El Profesional autenticado no es el dueño de la reseña, o falta completar el registro"
           },
           "404": {
             "description": "Reseña no encontrada"
@@ -1100,8 +1540,8 @@
           "401": {
             "description": "Falta token o es inválido"
           },
-          "404": {
-            "description": "El usuario autenticado no tiene perfil de Oferente"
+          "403": {
+            "description": "Falta completar el registro de Profesional (`registro_incompleto`)"
           }
         },
         "security": [
@@ -1141,8 +1581,8 @@
           "401": {
             "description": "Falta token o es inválido"
           },
-          "404": {
-            "description": "El usuario autenticado no tiene perfil de Oferente"
+          "403": {
+            "description": "Falta completar el registro de Profesional (`registro_incompleto`)"
           },
           "422": {
             "description": "Tipo inválido, o el número no tiene la cantidad de dígitos exigida"
@@ -1180,8 +1620,8 @@
           "401": {
             "description": "Falta token o es inválido"
           },
-          "404": {
-            "description": "El usuario autenticado no tiene perfil de Oferente"
+          "403": {
+            "description": "Falta completar el registro de Profesional (`registro_incompleto`)"
           }
         },
         "security": [
@@ -1331,7 +1771,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OferenteOut"
+                  "$ref": "#/components/schemas/OferentePrivadoOut"
                 }
               }
             }
@@ -1752,6 +2192,25 @@
   },
   "components": {
     "schemas": {
+      "ArchivoRefIn": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "El path que devolvió el paso 1."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "title": "ArchivoRefIn",
+        "description": "Body de la confirmación de foto de perfil o portada (paso 3).",
+        "example": {
+          "path": "oferentes/7/perfil/ab12cd34ef56ab12cd34ef56ab12cd34.jpg"
+        }
+      },
       "CalificacionesComentariosIn": {
         "properties": {
           "criterios": {
@@ -1786,6 +2245,65 @@
             "puntualidad": 4.5
           }
         }
+      },
+      "CatalogoRegistroOut": {
+        "properties": {
+          "categorias": {
+            "items": {
+              "$ref": "#/components/schemas/CategoriaCatalogo"
+            },
+            "type": "array",
+            "title": "Categorias"
+          },
+          "experiencia": {
+            "items": {
+              "$ref": "#/components/schemas/ExperienciaCatalogo"
+            },
+            "type": "array",
+            "title": "Experiencia"
+          },
+          "dias": {
+            "items": {
+              "$ref": "#/components/schemas/DiaCatalogo"
+            },
+            "type": "array",
+            "title": "Dias"
+          },
+          "horario_default": {
+            "$ref": "#/components/schemas/HorarioPorDefecto"
+          },
+          "limites": {
+            "$ref": "#/components/schemas/LimitesCatalogo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "categorias",
+          "experiencia",
+          "dias",
+          "horario_default",
+          "limites"
+        ],
+        "title": "CatalogoRegistroOut",
+        "description": "Llena todos los selectores del formulario de registro en una sola llamada."
+      },
+      "CategoriaCatalogo": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "nombre"
+        ],
+        "title": "CategoriaCatalogo"
       },
       "CategoriaCreate": {
         "properties": {
@@ -1848,6 +2366,24 @@
           "estado"
         ],
         "title": "CategoriaOut"
+      },
+      "CategoriaRef": {
+        "properties": {
+          "id_categoria": {
+            "type": "integer",
+            "title": "Id Categoria"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_categoria",
+          "nombre"
+        ],
+        "title": "CategoriaRef"
       },
       "CategoriaUpdate": {
         "properties": {
@@ -1964,6 +2500,30 @@
           "puntualidad": 4.5
         }
       },
+      "DiaCatalogo": {
+        "properties": {
+          "dia": {
+            "type": "integer",
+            "title": "Dia",
+            "description": "ISO-8601: 1 = lunes … 7 = domingo."
+          },
+          "corto": {
+            "type": "string",
+            "title": "Corto"
+          },
+          "largo": {
+            "type": "string",
+            "title": "Largo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dia",
+          "corto",
+          "largo"
+        ],
+        "title": "DiaCatalogo"
+      },
       "EstadoCuentaEnum": {
         "type": "string",
         "enum": [
@@ -1982,6 +2542,61 @@
         ],
         "title": "EstadoVerificacionEnum"
       },
+      "ExperienciaCatalogo": {
+        "properties": {
+          "codigo": {
+            "type": "string",
+            "title": "Codigo"
+          },
+          "etiqueta": {
+            "type": "string",
+            "title": "Etiqueta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "codigo",
+          "etiqueta"
+        ],
+        "title": "ExperienciaCatalogo"
+      },
+      "ExperienciaRef": {
+        "properties": {
+          "codigo": {
+            "type": "string",
+            "title": "Codigo"
+          },
+          "etiqueta": {
+            "type": "string",
+            "title": "Etiqueta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "codigo",
+          "etiqueta"
+        ],
+        "title": "ExperienciaRef"
+      },
+      "FotoTrabajoOut": {
+        "properties": {
+          "orden": {
+            "type": "integer",
+            "title": "Orden",
+            "description": "Posición de la foto dentro del trabajo, desde 1."
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "orden",
+          "url"
+        ],
+        "title": "FotoTrabajoOut"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1994,6 +2609,48 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HorarioPorDefecto": {
+        "properties": {
+          "apertura": {
+            "type": "string",
+            "title": "Apertura"
+          },
+          "cierre": {
+            "type": "string",
+            "title": "Cierre"
+          }
+        },
+        "type": "object",
+        "required": [
+          "apertura",
+          "cierre"
+        ],
+        "title": "HorarioPorDefecto"
+      },
+      "LimitesCatalogo": {
+        "properties": {
+          "trabajos": {
+            "type": "integer",
+            "title": "Trabajos",
+            "description": "Trabajos realizados por Oferente."
+          },
+          "fotos_por_trabajo": {
+            "type": "integer",
+            "title": "Fotos Por Trabajo"
+          },
+          "tamano_maximo_mb": {
+            "type": "integer",
+            "title": "Tamano Maximo Mb"
+          }
+        },
+        "type": "object",
+        "required": [
+          "trabajos",
+          "fotos_por_trabajo",
+          "tamano_maximo_mb"
+        ],
+        "title": "LimitesCatalogo"
       },
       "MatriculaOut": {
         "properties": {
@@ -2034,6 +2691,24 @@
           "fecha_fidelizacion"
         ],
         "title": "MatriculaOut"
+      },
+      "MatriculaRef": {
+        "properties": {
+          "tipo_profesional": {
+            "type": "string",
+            "title": "Tipo Profesional"
+          },
+          "numero_matricula": {
+            "type": "string",
+            "title": "Numero Matricula"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tipo_profesional",
+          "numero_matricula"
+        ],
+        "title": "MatriculaRef"
       },
       "NotificacionOut": {
         "properties": {
@@ -2199,7 +2874,7 @@
           "estado": "Pendiente",
           "fecha_creacion": "2026-09-15T14:32:00Z",
           "id_notificacion": 1,
-          "mensaje": "Juan Cliente (3516924551 / juan@example.com) dejó una reseña sobre tu trabajo. Revisá los datos de contacto y decidí si la aceptás.",
+          "mensaje": "Recibiste una nueva reseña de un cliente 3516924551 a través de Offix.",
           "nombre_cliente": "Juan Cliente",
           "requiere_accion": true,
           "resena_id": 7,
@@ -2207,303 +2882,14 @@
           "tipo": "Resena_Nueva"
         }
       },
-      "OferenteCreate": {
-        "properties": {
-          "nombre": {
-            "type": "string",
-            "title": "Nombre"
-          },
-          "apellido": {
-            "type": "string",
-            "title": "Apellido"
-          },
-          "dni_cuit": {
-            "type": "string",
-            "title": "Dni Cuit"
-          },
-          "telefono": {
-            "type": "string",
-            "title": "Telefono"
-          },
-          "categoria_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Categoria Id"
-          },
-          "numero_matricula": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Numero Matricula"
-          },
-          "latitud": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Latitud"
-          },
-          "longitud": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Longitud"
-          },
-          "radio_cobertura_km": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Radio Cobertura Km"
-          },
-          "hora_inicio_atencion": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Hora Inicio Atencion"
-          },
-          "hora_fin_atencion": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Hora Fin Atencion"
-          },
-          "disponible_emergencia": {
-            "type": "boolean",
-            "title": "Disponible Emergencia",
-            "default": false
-          },
-          "descripcion": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Descripcion"
-          }
-        },
-        "type": "object",
-        "required": [
-          "nombre",
-          "apellido",
-          "dni_cuit",
-          "telefono"
-        ],
-        "title": "OferenteCreate",
-        "example": {
-          "apellido": "Pérez",
-          "categoria_id": 1,
-          "descripcion": "Electricista matriculado, más de 10 años de experiencia.",
-          "disponible_emergencia": true,
-          "dni_cuit": "20-30111222-3",
-          "nombre": "Juan",
-          "numero_matricula": "EL-12345",
-          "telefono": "+54 3564 400111"
-        }
-      },
-      "OferenteOut": {
-        "properties": {
-          "nombre": {
-            "type": "string",
-            "title": "Nombre"
-          },
-          "apellido": {
-            "type": "string",
-            "title": "Apellido"
-          },
-          "dni_cuit": {
-            "type": "string",
-            "title": "Dni Cuit"
-          },
-          "telefono": {
-            "type": "string",
-            "title": "Telefono"
-          },
-          "categoria_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Categoria Id"
-          },
-          "numero_matricula": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Numero Matricula"
-          },
-          "latitud": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Latitud"
-          },
-          "longitud": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Longitud"
-          },
-          "radio_cobertura_km": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Radio Cobertura Km"
-          },
-          "hora_inicio_atencion": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Hora Inicio Atencion"
-          },
-          "hora_fin_atencion": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Hora Fin Atencion"
-          },
-          "disponible_emergencia": {
-            "type": "boolean",
-            "title": "Disponible Emergencia",
-            "default": false
-          },
-          "descripcion": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Descripcion"
-          },
-          "id_oferente": {
-            "type": "integer",
-            "title": "Id Oferente"
-          },
-          "estado_verificacion": {
-            "type": "string",
-            "title": "Estado Verificacion"
-          },
-          "promedio_calificacion": {
-            "type": "string",
-            "title": "Promedio Calificacion"
-          },
-          "cantidad_rechazos_acumulados": {
-            "type": "integer",
-            "title": "Cantidad Rechazos Acumulados"
-          },
-          "tiene_matricula_validada": {
-            "type": "boolean",
-            "title": "Tiene Matricula Validada",
-            "description": "HU-02: true con al menos una matrícula fidelizada contra el padrón.",
-            "default": false
-          }
-        },
-        "type": "object",
-        "required": [
-          "nombre",
-          "apellido",
-          "dni_cuit",
-          "telefono",
-          "id_oferente",
-          "estado_verificacion",
-          "promedio_calificacion",
-          "cantidad_rechazos_acumulados"
-        ],
-        "title": "OferenteOut"
-      },
-      "OferenteUpdate": {
+      "OferenteEdicion": {
         "properties": {
           "nombre": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 2
               },
               {
                 "type": "null"
@@ -2514,7 +2900,9 @@
           "apellido": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 2
               },
               {
                 "type": "null"
@@ -2544,22 +2932,20 @@
             ],
             "title": "Categoria Id"
           },
-          "numero_matricula": {
+          "especialidad": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 100
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Numero Matricula"
+            "title": "Especialidad"
           },
-          "latitud": {
+          "experiencia": {
             "anyOf": [
-              {
-                "type": "number"
-              },
               {
                 "type": "string"
               },
@@ -2567,35 +2953,21 @@
                 "type": "null"
               }
             ],
-            "title": "Latitud"
+            "title": "Experiencia"
           },
-          "longitud": {
+          "dias_atencion": {
             "anyOf": [
               {
-                "type": "number"
-              },
-              {
-                "type": "string"
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Longitud"
-          },
-          "radio_cobertura_km": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Radio Cobertura Km"
+            "title": "Dias Atencion"
           },
           "hora_inicio_atencion": {
             "anyOf": [
@@ -2632,6 +3004,18 @@
             ],
             "title": "Disponible Emergencia"
           },
+          "info_guardia": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Info Guardia"
+          },
           "descripcion": {
             "anyOf": [
               {
@@ -2642,10 +3026,632 @@
               }
             ],
             "title": "Descripcion"
+          },
+          "latitud": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitud"
+          },
+          "longitud": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitud"
+          },
+          "radio_cobertura_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radio Cobertura Km"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "OferenteEdicion",
+        "description": "Body de `PUT /api/v1/oferentes/me` (caso A33, D18). Todo opcional y sin\nDNI/CUIT: ese dato no se cambia después del registro."
+      },
+      "OferentePrivadoOut": {
+        "properties": {
+          "id_oferente": {
+            "type": "integer",
+            "title": "Id Oferente"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "apellido": {
+            "type": "string",
+            "title": "Apellido"
+          },
+          "categoria_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria Id"
+          },
+          "categoria": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoriaRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "especialidad": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Especialidad"
+          },
+          "experiencia": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExperienciaRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "telefono": {
+            "type": "string",
+            "title": "Telefono"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email",
+            "description": "El mismo correo con el que el Profesional entra (D6). Es público por D7."
+          },
+          "dias_atencion": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Dias Atencion"
+          },
+          "hora_inicio_atencion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora Inicio Atencion"
+          },
+          "hora_fin_atencion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora Fin Atencion"
+          },
+          "disponible_emergencia": {
+            "type": "boolean",
+            "title": "Disponible Emergencia"
+          },
+          "info_guardia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Info Guardia"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "latitud": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitud"
+          },
+          "longitud": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitud"
+          },
+          "radio_cobertura_km": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radio Cobertura Km"
+          },
+          "promedio_calificacion": {
+            "type": "string",
+            "title": "Promedio Calificacion"
+          },
+          "cantidad_resenas": {
+            "type": "integer",
+            "title": "Cantidad Resenas",
+            "description": "Reseñas aceptadas. Es el contador de la pestaña Opiniones."
+          },
+          "cantidad_trabajos": {
+            "type": "integer",
+            "title": "Cantidad Trabajos",
+            "description": "Trabajos realizados cargados. Con 5, el frontend oculta el alta."
+          },
+          "tiene_matricula_validada": {
+            "type": "boolean",
+            "title": "Tiene Matricula Validada",
+            "description": "HU-02: true con al menos una matrícula fidelizada.",
+            "default": false
+          },
+          "matriculas": {
+            "items": {
+              "$ref": "#/components/schemas/MatriculaRef"
+            },
+            "type": "array",
+            "title": "Matriculas"
+          },
+          "foto_perfil_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Foto Perfil Url"
+          },
+          "portada_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portada Url"
+          },
+          "dni_cuit": {
+            "type": "string",
+            "title": "Dni Cuit"
+          },
+          "estado_verificacion": {
+            "type": "string",
+            "title": "Estado Verificacion"
+          },
+          "cantidad_rechazos_acumulados": {
+            "type": "integer",
+            "title": "Cantidad Rechazos Acumulados",
+            "description": "Dato interno de moderación; no se expone al público."
           }
         },
         "type": "object",
-        "title": "OferenteUpdate"
+        "required": [
+          "id_oferente",
+          "nombre",
+          "apellido",
+          "telefono",
+          "email",
+          "disponible_emergencia",
+          "promedio_calificacion",
+          "cantidad_resenas",
+          "cantidad_trabajos",
+          "dni_cuit",
+          "estado_verificacion",
+          "cantidad_rechazos_acumulados"
+        ],
+        "title": "OferentePrivadoOut",
+        "description": "Perfil del dueño (`GET /oferentes/me`): suma lo que nadie más ve."
+      },
+      "OferentePublicoOut": {
+        "properties": {
+          "id_oferente": {
+            "type": "integer",
+            "title": "Id Oferente"
+          },
+          "nombre": {
+            "type": "string",
+            "title": "Nombre"
+          },
+          "apellido": {
+            "type": "string",
+            "title": "Apellido"
+          },
+          "categoria_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categoria Id"
+          },
+          "categoria": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoriaRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "especialidad": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Especialidad"
+          },
+          "experiencia": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExperienciaRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "telefono": {
+            "type": "string",
+            "title": "Telefono"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email",
+            "description": "El mismo correo con el que el Profesional entra (D6). Es público por D7."
+          },
+          "dias_atencion": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Dias Atencion"
+          },
+          "hora_inicio_atencion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora Inicio Atencion"
+          },
+          "hora_fin_atencion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hora Fin Atencion"
+          },
+          "disponible_emergencia": {
+            "type": "boolean",
+            "title": "Disponible Emergencia"
+          },
+          "info_guardia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Info Guardia"
+          },
+          "descripcion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Descripcion"
+          },
+          "latitud": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitud"
+          },
+          "longitud": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitud"
+          },
+          "radio_cobertura_km": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radio Cobertura Km"
+          },
+          "promedio_calificacion": {
+            "type": "string",
+            "title": "Promedio Calificacion"
+          },
+          "cantidad_resenas": {
+            "type": "integer",
+            "title": "Cantidad Resenas",
+            "description": "Reseñas aceptadas. Es el contador de la pestaña Opiniones."
+          },
+          "cantidad_trabajos": {
+            "type": "integer",
+            "title": "Cantidad Trabajos",
+            "description": "Trabajos realizados cargados. Con 5, el frontend oculta el alta."
+          },
+          "tiene_matricula_validada": {
+            "type": "boolean",
+            "title": "Tiene Matricula Validada",
+            "description": "HU-02: true con al menos una matrícula fidelizada.",
+            "default": false
+          },
+          "matriculas": {
+            "items": {
+              "$ref": "#/components/schemas/MatriculaRef"
+            },
+            "type": "array",
+            "title": "Matriculas"
+          },
+          "foto_perfil_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Foto Perfil Url"
+          },
+          "portada_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portada Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_oferente",
+          "nombre",
+          "apellido",
+          "telefono",
+          "email",
+          "disponible_emergencia",
+          "promedio_calificacion",
+          "cantidad_resenas",
+          "cantidad_trabajos"
+        ],
+        "title": "OferentePublicoOut",
+        "description": "Perfil público (CA04, D7): todo menos DNI/CUIT, estado de verificación y\nrechazos acumulados. Las horas van como \"HH:MM\"."
+      },
+      "OferenteRegistro": {
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 2,
+            "title": "Nombre",
+            "description": "Nombre o razón social."
+          },
+          "apellido": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 2,
+            "title": "Apellido"
+          },
+          "telefono": {
+            "type": "string",
+            "title": "Telefono",
+            "description": "10 dígitos con guion opcional. Sin 0, 15 ni +54."
+          },
+          "categoria_id": {
+            "type": "integer",
+            "title": "Categoria Id",
+            "description": "Categoría u oficio principal, activa."
+          },
+          "especialidad": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Especialidad"
+          },
+          "experiencia": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiencia"
+          },
+          "dias_atencion": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Dias Atencion",
+            "description": "Días ISO: 1 = lunes … 7 = domingo. Al menos uno."
+          },
+          "hora_inicio_atencion": {
+            "type": "string",
+            "format": "time",
+            "title": "Hora Inicio Atencion",
+            "description": "HH:MM, minutos 00 o 30."
+          },
+          "hora_fin_atencion": {
+            "type": "string",
+            "format": "time",
+            "title": "Hora Fin Atencion",
+            "description": "HH:MM, minutos 00 o 30, posterior a la apertura."
+          },
+          "disponible_emergencia": {
+            "type": "boolean",
+            "title": "Disponible Emergencia",
+            "default": false
+          },
+          "info_guardia": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Info Guardia"
+          },
+          "dni_cuit": {
+            "type": "string",
+            "title": "Dni Cuit",
+            "description": "7 u 8 dígitos (DNI) o 11 con dígito verificador (CUIT). Guiones y puntos opcionales."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "nombre",
+          "apellido",
+          "telefono",
+          "categoria_id",
+          "dias_atencion",
+          "hora_inicio_atencion",
+          "hora_fin_atencion",
+          "dni_cuit"
+        ],
+        "title": "OferenteRegistro",
+        "description": "Body de `POST /api/v1/oferentes` (HU-04, CA02 y CA03).",
+        "example": {
+          "apellido": "Ludueña",
+          "categoria_id": 1,
+          "dias_atencion": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "disponible_emergencia": true,
+          "dni_cuit": "27-30111222-6",
+          "especialidad": "Instalaciones domiciliarias",
+          "experiencia": "3_A_5",
+          "hora_fin_atencion": "18:00",
+          "hora_inicio_atencion": "08:00",
+          "info_guardia": "Atiendo urgencias de lunes a sábado hasta las 22 h.",
+          "nombre": "Serena",
+          "telefono": "3564-400111"
+        }
       },
       "PerfilOut": {
         "properties": {
@@ -2672,6 +3678,12 @@
           },
           "rol": {
             "$ref": "#/components/schemas/RolUsuario"
+          },
+          "requiere_registro": {
+            "type": "boolean",
+            "title": "Requiere Registro",
+            "description": "true si es Oferente y todavía no completó el formulario de Profesional. El frontend lo manda a /registro.",
+            "default": false
           }
         },
         "type": "object",
@@ -2939,6 +3951,69 @@
         "title": "ResenaPrivadaOut",
         "description": "Lo que ve el Profesional dueño de la reseña. A diferencia de la salida\npública, expone el contacto del cliente: es una decisión explícita del\nequipo, para que pueda verificar la identidad y comunicarse."
       },
+      "ResenaPublicaOut": {
+        "properties": {
+          "id_resena": {
+            "type": "integer",
+            "title": "Id Resena"
+          },
+          "cliente": {
+            "type": "string",
+            "title": "Cliente",
+            "description": "Primer nombre y, si hay segundo, su inicial: 'Juan C.'."
+          },
+          "puntuacion_global": {
+            "type": "number",
+            "title": "Puntuacion Global",
+            "description": "Promedio de los cuatro criterios, con dos decimales."
+          },
+          "criterios": {
+            "type": "object",
+            "title": "Criterios",
+            "description": "Puntualidad, precio, calidad y atención (de 0.5 a 5 en pasos de 0.5)."
+          },
+          "comentario": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comentario"
+          },
+          "fecha_creacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Creacion",
+            "description": "Cuándo la cargó el cliente, no cuándo la aceptó el Profesional."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_resena",
+          "cliente",
+          "puntuacion_global",
+          "criterios",
+          "fecha_creacion"
+        ],
+        "title": "ResenaPublicaOut",
+        "description": "Una tarjeta de la pestaña \"Opiniones\" (HU-01 T07, D11, D12). Sin contacto\ndel cliente, sin estado (siempre Aceptada) y con el nombre reducido a\n\"Juan C.\", para no exponer al cliente.",
+        "example": {
+          "cliente": "Juan C.",
+          "comentario": "Buen servicio...",
+          "criterios": {
+            "atencion": 4.5,
+            "calidad": 5,
+            "precio": 5,
+            "puntualidad": 4.5
+          },
+          "fecha_creacion": "2026-09-29T21:29:00Z",
+          "id_resena": 12,
+          "puntuacion_global": 4.75
+        }
+      },
       "RolUsuario": {
         "type": "string",
         "enum": [
@@ -2987,7 +4062,7 @@
           "nombre_cliente"
         ],
         "title": "SolicitudResenaCreate",
-        "description": "Modal \"Datos del Cliente\" del perfil público. El nombre es obligatorio y\nhay que cargar **al menos uno** de los dos datos de contacto; se pueden\ncargar los dos y entonces se usan los dos canales.",
+        "description": "Modal \"Datos del Cliente\" del perfil público. El nombre es obligatorio.\nQué contacto se acepta depende de quién genera el enlace, y eso lo resuelve\nel router (D8): sin login solo correo; el Profesional dueño, cualquiera de los dos.",
         "example": {
           "email_cliente": "juan.cliente@example.com",
           "nombre_cliente": "Juan Cliente",
@@ -3188,6 +4263,73 @@
           "vencida": false
         }
       },
+      "SubidaIn": {
+        "properties": {
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "Perfil",
+              "Portada",
+              "Trabajo"
+            ],
+            "title": "Tipo"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type",
+            "description": "image/jpeg o image/png."
+          },
+          "tamano_bytes": {
+            "type": "integer",
+            "title": "Tamano Bytes",
+            "description": "Tamaño del archivo en bytes. Máximo 5 MB."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "tipo",
+          "content_type",
+          "tamano_bytes"
+        ],
+        "title": "SubidaIn",
+        "description": "Paso 1 de la subida: el navegador declara qué va a subir. Lo que cuenta\nal confirmar es lo que reporta Storage, no esto.",
+        "example": {
+          "content_type": "image/jpeg",
+          "tamano_bytes": 1048576,
+          "tipo": "Perfil"
+        }
+      },
+      "SubidaOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "Clave del objeto en el bucket. Se devuelve al confirmar."
+          },
+          "upload_url": {
+            "type": "string",
+            "title": "Upload Url",
+            "description": "URL firmada a la que se hace el PUT del archivo."
+          },
+          "tipo": {
+            "type": "string",
+            "title": "Tipo"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "upload_url",
+          "tipo",
+          "content_type"
+        ],
+        "title": "SubidaOut"
+      },
       "Token": {
         "properties": {
           "access_token": {
@@ -3205,6 +4347,107 @@
           "access_token"
         ],
         "title": "Token"
+      },
+      "TrabajoCreate": {
+        "properties": {
+          "titulo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Titulo"
+          },
+          "descripcion": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 10,
+            "title": "Descripcion",
+            "description": "Obligatoria. Entre 10 y 1000 caracteres."
+          },
+          "fotos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fotos",
+            "description": "Entre 1 y 5 paths, en el orden en que se cargaron."
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "descripcion",
+          "fotos"
+        ],
+        "title": "TrabajoCreate",
+        "description": "Body de `POST /api/v1/oferentes/me/trabajos` (HU-04 T06, D13).\n\n`fotos` son los paths que devolvió la subida, **en el orden de carga**: la\nprimera es la foto principal (caso A50).",
+        "example": {
+          "descripcion": "Reemplazo del disyuntor diferencial del tablero principal.",
+          "fotos": [
+            "oferentes/7/trabajo/ab12cd34ef56ab12cd34ef56ab12cd34.jpg"
+          ],
+          "titulo": "Cambio de disyuntor"
+        }
+      },
+      "TrabajoOut": {
+        "properties": {
+          "id_trabajo": {
+            "type": "integer",
+            "title": "Id Trabajo"
+          },
+          "titulo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Titulo"
+          },
+          "descripcion": {
+            "type": "string",
+            "title": "Descripcion"
+          },
+          "fecha_creacion": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fecha Creacion"
+          },
+          "foto_principal_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Foto Principal Url",
+            "description": "Foto con orden 1. Es la que muestra la tarjeta."
+          },
+          "fotos": {
+            "items": {
+              "$ref": "#/components/schemas/FotoTrabajoOut"
+            },
+            "type": "array",
+            "title": "Fotos",
+            "description": "Todas las fotos ordenadas. Alimenta el carrusel."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id_trabajo",
+          "descripcion",
+          "fecha_creacion"
+        ],
+        "title": "TrabajoOut"
       },
       "UsuarioCreate": {
         "properties": {

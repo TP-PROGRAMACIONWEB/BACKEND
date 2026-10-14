@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.services.mensajes import normalizar_telefono, telefono_es_valido
 
@@ -47,9 +47,9 @@ class CalificacionesComentariosIn(BaseModel):
 
 
 class SolicitudResenaCreate(BaseModel):
-    """Modal "Datos del Cliente" del perfil público. El nombre es obligatorio y
-    hay que cargar **al menos uno** de los dos datos de contacto; se pueden
-    cargar los dos y entonces se usan los dos canales."""
+    """Modal "Datos del Cliente" del perfil público. El nombre es obligatorio.
+    Qué contacto se acepta depende de quién genera el enlace, y eso lo resuelve
+    el router (D8): sin login solo correo; el Profesional dueño, cualquiera de los dos."""
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -80,11 +80,6 @@ class SolicitudResenaCreate(BaseModel):
             )
         return normalizar_telefono(value)
 
-    @model_validator(mode="after")
-    def exigir_un_contacto(self):
-        if not self.telefono_cliente and not self.email_cliente:
-            raise ValueError("Hay que cargar al menos un dato de contacto: teléfono o correo electrónico")
-        return self
 
 
 class SolicitudResenaOut(BaseModel):
@@ -169,6 +164,32 @@ class ResenaModeracion(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": {"aceptar": True}})
 
     aceptar: bool = Field(description="true = aceptar y publicar la reseña; false = rechazarla.")
+
+
+class ResenaPublicaOut(BaseModel):
+    """Una tarjeta de la pestaña "Opiniones" (HU-01 T07, D11, D12). Sin contacto
+    del cliente, sin estado (siempre Aceptada) y con el nombre reducido a
+    "Juan C.", para no exponer al cliente."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id_resena": 12,
+                "cliente": "Juan C.",
+                "puntuacion_global": 4.75,
+                "criterios": {"puntualidad": 4.5, "precio": 5, "calidad": 5, "atencion": 4.5},
+                "comentario": "Buen servicio...",
+                "fecha_creacion": "2026-09-29T21:29:00Z",
+            }
+        }
+    )
+
+    id_resena: int
+    cliente: str = Field(description="Primer nombre y, si hay segundo, su inicial: 'Juan C.'.")
+    puntuacion_global: float = Field(description="Promedio de los cuatro criterios, con dos decimales.")
+    criterios: dict = Field(description="Puntualidad, precio, calidad y atención (de 0.5 a 5 en pasos de 0.5).")
+    comentario: str | None = None
+    fecha_creacion: datetime = Field(description="Cuándo la cargó el cliente, no cuándo la aceptó el Profesional.")
 
 
 class ResenaOut(BaseModel):

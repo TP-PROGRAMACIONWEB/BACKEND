@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
+from app.core.errores import error_negocio
 from app.db.database import get_db
 from app.models.matricula import Matricula, ValidacionMatricula
 from app.models.oferente import Oferente
@@ -13,14 +14,16 @@ router = APIRouter(prefix="/api/v1/oferentes/me/matriculas", tags=["Matrículas"
 
 RESPUESTAS_COMUNES = {
     401: {"description": "Falta token o es inválido"},
-    404: {"description": "El usuario autenticado no tiene perfil de Oferente"},
+    403: {"description": "Falta completar el registro de Profesional (`registro_incompleto`)"},
 }
 
 
 def _oferente_actual(db: Session, usuario: Usuario) -> Oferente:
+    """Mismo criterio que el guard de HU-04: sin perfil no hay matrículas que
+    fidelizar, y el error es el mismo código que en el resto de la API."""
     oferente = db.get(Oferente, usuario.id_usuario)
     if not oferente:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="El usuario no tiene perfil de Oferente")
+        raise error_negocio(status.HTTP_403_FORBIDDEN, "registro_incompleto", "Completá el registro de Profesional para continuar")
     return oferente
 
 
