@@ -110,7 +110,9 @@ def sincronizar(db: Session, filas: list[FilaPadronExterna], origen: str, dry_ru
 
 
 def filas_desde_archivos_locales() -> list[FilaPadronExterna]:
-    """Reusa parsers actuales (gasistas.md + aire.json) como FilaPadronExterna."""
+    """Reusa parsers actuales (gasistas.md + aire.json + ecogas-san-francisco.json)."""
+    from datetime import date as _date
+
     base = Path(__file__).resolve().parents[1] / "db" / "padrones"
     out: list[FilaPadronExterna] = []
     for f in parsear_padron_md(base / "gasistas.md"):
@@ -121,4 +123,18 @@ def filas_desde_archivos_locales() -> list[FilaPadronExterna]:
         out.append(
             FilaPadronExterna("Aire acondicionado", f.numero_matricula, f.nombre_matriculado, f.categoria, f.fecha_vencimiento, fuente="local:aire.json")
         )
+    ecogas_sf = base / "ecogas-san-francisco.json"
+    if ecogas_sf.exists():
+        for r in json.loads(ecogas_sf.read_text(encoding="utf-8")):
+            venc = r["fecha_vencimiento"]
+            out.append(
+                FilaPadronExterna(
+                    "Gasista",
+                    str(r["numero_matricula"]),
+                    str(r["nombre_matriculado"]),
+                    str(r.get("categoria", "Primera")),
+                    _date.fromisoformat(venc) if isinstance(venc, str) else venc,
+                    fuente="local:ecogas-san-francisco.json",
+                )
+            )
     return out

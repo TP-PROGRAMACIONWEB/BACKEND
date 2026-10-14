@@ -1,0 +1,302 @@
+[
+  {
+    "numero_matricula": "3753",
+    "nombre_matriculado": "SAN MILLAN LUIS MORENO",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "3836",
+    "nombre_matriculado": "LILIANA L. LAFERLA",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "4141",
+    "nombre_matriculado": "LUIS A. LUCANTIS",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "4146",
+    "nombre_matriculado": "RODOLFO RUIZ",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "4168",
+    "nombre_matriculado": "EDUARDO JOFRE",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "4185",
+    "nombre_matriculado": "FERNANDO MASSA",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "4202",
+    "nombre_matriculado": "GABRIELA RAIMONDO",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "4254",
+    "nombre_matriculado": "FABIANA A. SCARAFIA",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "4305",
+    "nombre_matriculado": "MARIO CESAR BARONI",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "4365",
+    "nombre_matriculado": "RUBEN FCO. DE OCAÑA",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "4477",
+    "nombre_matriculado": "ARIEL ELADIO BORELLO",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "4523",
+    "nombre_matriculado": "OMAR ZANON",
+    "categoria": "Segunda",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "4691",
+    "nombre_matriculado": "GRACIELA BETTINA PERAZZI",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "5427",
+    "nombre_matriculado": "SUSANA RITA MORETTO",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "5534",
+    "nombre_matriculado": "CECILIA FERRERO",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "5570",
+    "nombre_matriculado": "CARLOS RAFAEL MONZONI",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "6246",
+    "nombre_matriculado": "DANIELA BEATRIZ VIOTTI",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "6267",
+    "nombre_matriculado": "RICARDO ANTONIO CELIZ",
+    "categoria": "Segunda",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "6352",
+    "nombre_matriculado": "ANA LAURA VERCESI",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "6438",
+    "nombre_matriculado": "SILVIO ROMAN LINGUA",
+    "categoria": "Segunda",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "6801",
+    "nombre_matriculado": "JUAN JOSE GERBAUDO",
+    "categoria": "Segunda",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "7051",
+    "nombre_matriculado": "ALEJANDRO MOLINARI",
+    "categoria": "Tercera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "7151",
+    "nombre_matriculado": "MARTIN ANGEL DE GRANDIS",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8024",
+    "nombre_matriculado": "MARIANO JAVIER VERRA",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8041",
+    "nombre_matriculado": "JACQUELINE ELIZABETH BRY",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8069",
+    "nombre_matriculado": "ABEL CRISTIAN CHALLAPA",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8089",
+    "nombre_matriculado": "SERGIO GABRIEL LINGUETTI",
+    "categoria": "Segunda",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8117",
+    "nombre_matriculado": "NOELIA ANDREA MONASTEROLO",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8224",
+    "nombre_matriculado": "PAOLA BETIANA BORGOGNO",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8329",
+    "nombre_matriculado": "DAIANA BELEN GARETTO",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8332",
+    "nombre_matriculado": "MELISA DI BERT",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8334",
+    "nombre_matriculado": "ROBER DARIO MAINARDI",
+    "categoria": "Tercera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8346",
+    "nombre_matriculado": "MARIA BEATRIZ REGALI",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8349",
+    "nombre_matriculado": "DARDO RENE REINOSO",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8363",
+    "nombre_matriculado": "GASTON MANUEL GOMEZ",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8383",
+    "nombre_matriculado": "DEL VALLE RE GISELA",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8401",
+    "nombre_matriculado": "FLORENCIA PALANCAR MARIA",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8681",
+    "nombre_matriculado": "JORGE HORTENCIO MATTER",
+    "categoria": "Segunda",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8772",
+    "nombre_matriculado": "CECILIA PEREZ",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8782",
+    "nombre_matriculado": "ESTELA ISABEL DEL VALL MATTAR",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8864",
+    "nombre_matriculado": "CAROLINA ANDREA DANGUISE",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8919",
+    "nombre_matriculado": "MARIA CLARA ALESSI",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "8944",
+    "nombre_matriculado": "CAMILA VIGNOLO",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "9176",
+    "nombre_matriculado": "CLAUDIA ISABEL PANERO,",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "9246",
+    "nombre_matriculado": "JAVIER SEBASTIAN CENTO",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "9260",
+    "nombre_matriculado": "PAMELA SOLEDAD FRANCONE",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "9325",
+    "nombre_matriculado": "AYELEN EVA DI GIULIO",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "9463",
+    "nombre_matriculado": "MARCOS ISAAC S. GRAMOY",
+    "categoria": "Segunda",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "9642",
+    "nombre_matriculado": "FRANCO SEBASTIAN VALLE",
+    "categoria": "Segunda",
+    "fecha_vencimiento": "2027-03-31"
+  },
+  {
+    "numero_matricula": "9759",
+    "nombre_matriculado": "NATALIA M. JUAN",
+    "categoria": "Primera",
+    "fecha_vencimiento": "2027-03-31"
+  }
+]

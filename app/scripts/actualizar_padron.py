@@ -11,11 +11,14 @@ from app.models import (  # noqa: F401 - registra mappers para create_all
     alerta_admin,
     archivo_adjunto,
     categoria,
+    emision_resena,
     matricula,
     notificacion,
     oferente,
+    oferente_dia_atencion,
     resena,
     solicitud_resena,
+    trabajo_realizado,
     usuario,
 )
 from app.services import padrones_sync
